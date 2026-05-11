@@ -1,0 +1,168 @@
+load "msh3"
+load "gsl"
+//showCPU = 1;
+
+int n=4;
+int MM=10,  // altitude points
+	NN=5; //  nu points
+real H=1;
+
+border a1(t=-1,1){x=t; y= -sqrt(sqrt((1-x*x)));}
+border a2(t=1,-1){x=t; y=0;}
+mesh th=buildmesh(a1(40*n)+a2(10*n));
+th = movemesh(th,[3*x,(1-0.2*x)*y]);
+
+/*
+func real expintE1(real t){
+    real epst=1e-10, gamma =0.577215664901533, abst=abs(t);
+    int K=9+(abst-1)*4; // precision for E1
+    if(abst<epst) return 0.;
+    real ak=abst, somme=-gamma - log(abst)+abst;
+    for(int k=2;k<K;k++){ ak *= -abst*(k-1)/sqr(k);somme += ak; }
+    return somme;
+}
+*/
+
+macro expintE1(t)gslsfexpintE1(t)//
+macro expintE2(t)gslsfexpintE2(t)//
+macro expintE3(t)gslsfexpintEn(3,t)//
+macro expintE4(t)gslsfexpintEn(4,t)//
+macro expintE5(t)gslsfexpintEn(5,t)//
+
+
+/*
+func real expintE2(real t){
+    return exp(-t) - t*expintE1(t);
+};
+func real expintE3(real t){
+    return (exp(-t) - t*expintE2(t))/2;
+};
+func real expintE4(real t){
+    return (exp(-t) - t*expintE3(t))/3;
+};
+func real expintE5(real t){
+    return (exp(-t) - t*expintE4(t))/4;
+};
+*/
+
+func real Bnu(real T, real nu){return (nu/T<1.e-5)? 0: nu*sqr(nu)/(exp(nu/T)-1);}
+func real dBnu(real T, real nu){return (nu<1.e-5)? 1:  sqr(sqr(nu)/(exp(nu/T)-1))/sqr(T);}
+
+fespace Vh(th,P1);
+fespace Uh(th,P2);
+Vh p,q, DT,T,TT, TE4, Te,Told,F,G, Taux;
+real uwind=10.; 
+Uh u=0,v=0,uh,vh,ux,uy;
+
+real visc=0.05 ,eps=1.e-5, kappaT=0.1, dt=0.1;
+real xdt=1./dt;
+real as=0.5, beta=0.5;
+
+real[int] kappa(NN+1), nu(NN+1); // distribution of nu integration points
+real 	numax=1.;
+real	Cs=3.1e-5,  
+		Tref=4798, Tsun=5800./Tref, Tearth=(273+10)/Tref,
+		kappa0=0.7, kappa1=0.5/(numax+1),
+		Stefan= sqr(sqr(pi))/15,  pi8=sqr(15*Stefan),
+		QTs4 = Cs*Stefan*sqr(sqr(Tsun)),
+		zeta5=1.037, xzeta9=1.002*40320 ;
+
+for(int i=0;i<=NN;i++){
+	nu[i]= numax/sqr(NN+1-i);
+	kappa[i] = kappa0 -kappa1*nu[i];
+}
+
+meshL Th1=Sline(MM,[0.,H*x,0.]); 
+
+for(int tstep=1;tstep<70;tstep++)
+{
+	ux=u; uy=v;
+	solve NS(u,v,p,uh,vh,q) = int2d(th)((u*uh+v*vh)/dt + (dx(q)*u+dy(q)*v)-(dx(p)*uh+dy(p)*vh)  + eps*p*q
+	+ visc*(dx(u)*dx(uh)+dy(u)*dy(uh)+dx(v)*dx(vh)+dy(v)*dy(vh)))
+							-int2d(th)((convect([ux,uy],-dt,ux)*uh+convect([ux,uy],-dt,uy)*vh)/dt)
+							+on(a1,u=0,v=0)+on(a2,u=uwind,v=0);
+	if(tstep==20){ th = adaptmesh(th, [u, v], q, err=0.05); plot(th,wait=0);}
+	plot([u,v],wait=0);
+}
+plot([u,v],wait=0, ps="lakevelocity.ps");
+
+dt=0.1;
+
+real bx1=kappa0*Stefan, bx2=24*kappa1*zeta5, bx4=as*kappa1*xzeta9, bx3=as*8*pi8*kappa0/15;
+func real intBkappa(real T){ return (bx1-bx2*T + (T*bx4-bx3 )*sqr(sqr(T)) )*sqr(sqr(T));}
+
+func real intintBkappa(real T){  return (bx1/5-bx2/6*T
+					+ (bx4/10-bx3/9 )*sqr(sqr(T)) )*T*sqr(sqr(T));}
+
+Vh[int] J0h(NN), J2h(NN),K0h(NN),K2h(NN), S0h(NN),S2h(NN),S0p(NN),S2p(NN);
+
+func real J0(real Y, int j){ 
+	return Cs*Bnu(Tsun,nu[j])*expintE3(kappa[j]*(H-Y))/2 
+			+int1d(Th1)(expintE1(abs(Y-y)*kappa[j])*S0h[j]+expintE3(abs(Y-y)*kappa[j])*S2h[j])/2;
+}
+
+func real J2(real Y, int j){ 
+	return Cs*Bnu(Tsun,nu[j])*expintE3(kappa[j]*(H-Y))/2 
+			+int1d(Th1)(expintE3(abs(Y-y)*kappa[j])*S0h[j]+expintE5(abs(Y-y)*kappa[j])*S2h[j])/2;
+}
+
+func real K0(real Y, int j){ 
+	return int1d(Th1)(expintE1(abs(Y-y)*kappa[j])*S0p[j]+expintE3(abs(Y-y)*kappa[j])*S2p[j])/2;
+}
+
+func real K2(real Y, int j){ 
+	return int1d(Th1)(expintE5(abs(Y-y)*kappa[j])*S0p[j]+expintE5(abs(Y-y)*kappa[j])*S2p[j])/2;
+}
+
+func real intJkappa(){ real aux=0; for(int i=0; i<NN; i++) aux = aux + J0(y,i)*kappa[i]*(nu[i+1]-nu[i]); return aux;}
+	
+Vh Jkappamean, Bkappamean;
+
+
+func real crit(real[int] & P){
+	T[] = P;
+	return  
+	  int2d(th)(T*T*xdt/2 +kappaT*(dx(T)*dx(T) + dy(T)*dy(T))/2 + intintBkappa(T))
+		- int2d(th)(convect([u,v],-dt,Told)*T*xdt + Jkappamean*T) - int1d(th,a2)(QTs4*T);
+}
+					
+func real[int] dcrit(real[int] &P) {
+	T[] = P;
+	varf AA(T1,T1h)=int2d(th)(T*T1h*xdt +kappaT*(dx(T)*dx(T1h) + dy(T)*dy(T1h)) ) - int1d(th,a2)(QTs4*T1h)
+		- int2d(th)( convect([u,v],-dt,Told)*T1h*xdt + (Jkappamean - intBkappa(Told))*T1h);// + on(a1,T1=0); 
+	P= AA(0,Vh);
+	return P;
+}
+	
+Told=Tearth;  T=Told;
+for(int j=0;j<NN;j++){J0h[j]=0;J2h[j]=0;K0h[j]=0;K2h[j]=0;}
+
+real[int] P=Told[]; 
+for(int tstep=0;tstep<50;tstep++) {
+	for(int j=0;j<NN;j++){
+		
+		real sigs=kappa[j]*as*sqr(sqr(nu[j]));
+		real siga=kappa[j]-sigs;
+		S0h[j] = siga*Bnu(T,nu[j]) + sigs*J0h[j];
+		Vh aux = J2h[j]-J0h[j]/3 - K0h[j]+K2h[j];
+		S2h[j] = 9*beta*sigs/8 * aux;
+		S0p[j] = - aux;
+		S2p[j] = aux;
+
+		J0h[j]=J0(y,j);
+		J2h[j]=J2(y,j);
+		K0h[j]=K0(y,j);
+		K2h[j]=K2(y,j);
+	}	
+		
+	Jkappamean = intJkappa(); 
+	BFGS(crit,dcrit, P, eps=1.e-6, nbiter=15, nbiterline=20);
+	Told[]=P; T=Told*Tref-273;
+	plot(T,cmm=tstep, fill=1,value=1,wait=0);
+	 T=Told;
+}
+ T=Told*Tref-273;
+ plot(T,fill=1,value=0,wait=0, ps="laketempe.ps");
+ T=0; for(int j=0;j<NN;j++) T = T + K0h[j];
+ plot(T,fill=1,value=0,wait=0, ps="lakepolarize.ps");
+cout <<"end"<<endl;

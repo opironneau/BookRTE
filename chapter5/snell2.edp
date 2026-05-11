@@ -1,0 +1,86 @@
+// file snell.edp
+load "lapack"
+verbosity=0;
+int n=7;  // triangulation and basis size
+real Y=0.5,  // n-discontinuity position
+	kappa=0.5; // extinction
+macro I0(X)( exp(-50*sqr(X-0.5)))//
+
+border segx(t=-1,1){x=t;y=Y;z=0;}
+meshL Sgxh = buildmeshL(segx(20*n));// One D FEM space for mu-variables (mu is x)
+fespace Xh(Sgxh,P1);
+
+border segy(t=0,1){x=0;y=t;z=0;}// One D FEM space for z-variables (z is y)
+meshL Sgyh = buildmeshL(segy(10*n));
+fespace Yh(Sgyh,P1);
+Yh T=1;
+
+real a=0., aY=-0.3; 
+Yh nn=1+aY*(y<Y); // Refractive index
+// build the computational domain
+border a11(t=0,1) {x=t; y=0;label=1;}
+border b1(t=0,Y)  {x=1; y=t;label=2;}
+border d1(t=Y,0)  {x=-1; y=t;label=5;}
+border a12(t=-1,0){x=t;y=0;label=6;}
+border a21(t=0,1) {x=t; y=Y;label=7;}
+border b2(t=Y,1)  {x=1; y=t;label=8;}
+border c21(t=1,0) {x=t;y=1;label=9;}
+border c22(t=0,-1){x=t;y=1;label=10;}
+border d2(t=1,Y)  {x=-1; y=t; label=11;}
+border a22(t=-1,0){x=t;y=Y;label=12;}
+
+mesh Th3 = buildmesh(a11(10*n)+b1(10*n)+d1(10*n)+a12(10*n)
+			+a21(10*n)+b2(10*n)+c21(10*n)+c22(10*n)+d2(10*n)+a22(10*n));
+plot(Th3,wait=0);
+fespace Wh(Th3,P1);
+
+
+Wh I,Q;// irradiance and polarization
+
+Xh[int] Xpm(4), Ypm(4), Xmp(4), Ymp(4); // Fresnel matrices
+real nnpm=nn(0,Y+0.01,0)/nn(0,Y-0.01,0); 
+real mucn2=1-sqr(1/nnpm);
+Xh  etapm = sqrt(max(0.,1-sqr(nnpm)*(1-x*x))),
+  	aux1= sqr((x-nnpm*etapm)/max(0.001,x+nnpm*etapm)), 
+	aux2= sqr((nnpm*x-etapm)/max(0.001,nnpm*x+etapm));
+	
+Xpm[0] = ((nnpm<1)+(nnpm>=1)*(x*x>mucn2))*(aux1+aux2)/2 + (nnpm>=1)*(x*x<mucn2) ;
+Xpm[3]=Xpm[0];
+Xpm[1]=((nnpm<1)+(nnpm>=1)*(x*x>mucn2))* (aux1-aux2)/2;
+Xpm[2]=Xpm[1];
+aux1=1/max(0.001,sqr(x+nnpm*etapm));
+aux2=1/max(0.001,sqr(nnpm*x+etapm));
+Ypm[0] = ((nnpm<1)+(nnpm>=1)*(x*x>mucn2))* 2*nnpm^3*abs(x*etapm)*(aux1+aux2) 
+		+(nnpm>=1)*(x*x<=mucn2);
+Ypm[3] = Ypm[0];
+Ypm[1] =  ((nnpm<1)+(nnpm>=1)*(x*x>mucn2))* 2*nnpm^3*abs(x*etapm)*(aux1-aux2);
+Ypm[2]=Ypm[1];
+
+real nnmp=1/nnpm;
+mucn2=1-sqr(1/nnmp);
+Xh  etamp =sqrt(max(0.,1-sqr(nnmp)*(1-x*x)));
+	aux1= sqr((x-nnmp*etamp)/max(0.001,x+nnmp*etamp)); 
+	aux2= sqr((nnmp*abs(x)-etamp)/max(0.001,nnmp*x+etamp));
+
+Xmp[0] = ((nnmp<1)+(nnmp>=1)*(x*x>mucn2))*(aux1+aux2)/2  + (nnmp>=1)*(x*x<mucn2);
+Xmp[3]=Xmp[0];
+Xmp[1]=((nnmp<1)+(nnmp>=1)*(x*x>mucn2))*(aux1-aux2)/2;
+Xmp[2]=Xmp[1];
+aux1=1/max(0.001,sqr(x+nnmp*etamp));
+aux2=1/max(0.001,sqr(nnmp*x+etamp));
+Ymp[0] =((nnmp<1)+(nnmp>=1)*(x*x>mucn2))* 2*nnmp*abs(x*etamp)*(aux1+aux2)
+		+(nnpm>=1)*(x*x<=mucn2);
+Ymp[3] = Ymp[0];
+Ymp[1] = ((nnmp<1)+(nnmp>=1)*(x*x>mucn2))* 2*nnmp*abs(x*etamp)*(aux1-aux2);
+Ymp[2]=Ymp[1];
+
+macro xe(X)((abs(X)>0.001)*X+0.001*(abs(X)<=0.001)) // to avoid division by zero
+
+I =  (x>0)*(  I0(etapm)*(y>Y)*Ypm[0]*exp(-kappa*Y/xe(etapm))*exp(-kappa*(y-Y)/xe(x))
+	      	 	+ I0(x)*(y<=Y)*exp(-kappa*y/xe(x))   	  ) 
+	+ (x<0)*I0(-x)*(y<Y)*Xpm[0](-x,0,0)*exp(-kappa*Y/xe(-x))*exp(-kappa*(Y-y)/xe(-x));
+	
+Q = (x>0)*I0(etapm)*(y>Y)*Ypm[2]*exp(-kappa*Y/xe(etapm))*exp(-kappa*(y-Y)/xe(x)) 
+	+ (x<0)*I0(-x)*(y<Y)*Xpm[2](-x,0,0)*exp(-kappa*Y/xe(-x))*exp(-kappa*(Y-y)/xe(-x));
+
+plot(I,value=1);plot(Q,value=1);

@@ -1,0 +1,31 @@
+int n=4;
+border a1(t=-1,1){x=t; y= -sqrt(sqrt((1-x*x)));}
+border a2(t=1,-1){x=t; y=0;}
+mesh Th=buildmesh(a1(40*n)+a2(10*n));
+Th = movemesh(Th,[3*x,(1-0.2*x)*y]);
+plot(Th,wait=true);
+
+fespace Vh(Th,P1);
+fespace Uh(Th,P2);
+Vh p,q;
+Uh u=1,v=0,uh,vh,ux,uy;
+
+real visc=0.05 ,eps=1.e-5, dt=0.02;
+
+for(int tstep=1;tstep<70;tstep++)
+{
+	ux=u; uy=v;
+	solve NS(u,v,p,uh,vh,q) = int2d(Th)((u*uh+v*vh)/dt + (dx(q)*u+dy(q)*v)-(dx(p)*uh+dy(p)*vh)  + eps*p*q
+	+ visc*(dx(u)*dx(uh)+dy(u)*dy(uh)+dx(v)*dx(vh)+dy(v)*dy(vh)))
+				-int2d(Th)((convect([ux,uy],-dt,ux)*uh+convect([ux,uy],-dt,uy)*vh)/dt)
+							+on(1,u=0,v=0)+on(2,u=10,v=0);
+if(tstep==20){ Th = adaptmesh(Th, [u, v], q, err=0.005); plot(Th,wait=true);}
+plot([u,v],wait=0);
+}
+plot([u,v],wait=0, ps="lakevelocity.ps");
+dt=0.1;
+
+
+
+
+

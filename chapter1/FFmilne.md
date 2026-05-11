@@ -1,0 +1,16 @@
+~~~freefem
+load "gsl"
+macro expintE1(t) gslsfexpintE1(t)// end of macro
+meshL Th = segment(20,[x]);
+fespace Vh(Th,P1);
+Vh J0=0, S;
+real cs=1, mus=1/sqrt(3.);
+func real E1B(real xx){ return int1d(Th)(expintE1(abs(x-xx))*S(x));}
+
+for(int i=0; i<15;i++){ // ISIF
+    S = J0+cs/2 * exp(-x/mus);
+    J0= E1B(x)/2;
+    cout<<J0(0)<<endl;  // to see convergence
+}
+cout<<J0[]<<endl;
+~~~~
