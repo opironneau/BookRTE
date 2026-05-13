@@ -14,7 +14,9 @@ You may use the grzaphic user interface (GUI) "VS Code" (download it free of cha
 
 ## Matlab: use their GUI.
 
-## Fortran: install the fortraan compiler with "homebrew" by typing in the terminal "brew install gfortran"  (Brew is available here https://brew.sh/). Then type 
+## Fortran
+
+Install the fortraan compiler with "homebrew" by typing in the terminal "brew install gfortran"  (Brew is available here https://brew.sh/). Then type 
 
 gfortran myfile.f90 -o myprogram
 
