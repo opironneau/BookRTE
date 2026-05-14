@@ -8,11 +8,15 @@
 
 - For Automatic Differentiation you need to put in the same folder as your program file the file "ddouble.hpp".
 
-## Python and Fenics Programs
+## Python and Fenics
 
-You may use the grzaphic user interface (GUI) "VS Code" (download it free of charge from the internet) 
+You may use the integrated development environment (IDE) "VS Code" (download it from
 
-## Matlab: use their GUI.
+https://code.visualstudio.com/download 
+
+## Matlab
+
+Use their IDE.
 
 ## Fortran
 
@@ -22,8 +26,14 @@ gfortran myfile.f90 -o myprogram
 
 ## FreeFem++
 
-- Download freefem from https://freefem.org/; see the section Assets (for Mac  maybe the version is in the Assets of one version older)
-
-- Follow the instructions. On has to bypass Apple's security rules because freefem is not registered with Apple (it can't be because some shared libraries in Fortran).  Whenever Apple suggests to throw the file away, don't and keep on trying.
+- Download freefem from 
   
-- Easiest is to use the gui VS Code. Install the "freefem" module (from the module install icon on the left paneel). If your program file ends with .edp or .md you should see a colored syntax and a button to execute the file. If it ends with .md you can also active the right panel and see the math which explains the program 
+  https://freefem.org/
+  
+  See the section Assets (for Mac  it may be that the version is in the Assets of one  older release section).
+
+- Follow the instructions. On has to bypass Apple's security rules because freefem is not registered with Apple (it can't be because some shared libraries in Fortran).  Whenever Apple suggests to throw the file away, don't! see the "security" section in the system parameters (below the apple icon in the very top left menu bar) and keep on trying.
+  
+- To run a freefem script, easiest is to use VS Code (see above). Install the "freefem" module (from the extension install icon on the left panel). If your program file ends with .edp or .md you should see a colored syntax and a button to execute the file. If it ends with .md you can also active the right panel and see the math which explains the program .  If you don't like VS Code you can edit your .edp file with any editor and drag it to the FreeFem icon (in the application folder) to run it.  You can also execute it via the Terminal (in Applications>Utilities folder) by typing 
+  
+  FreeFem++ myfile.edp
