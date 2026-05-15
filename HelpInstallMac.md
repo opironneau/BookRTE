@@ -10,7 +10,7 @@
 
 ## Python and Fenics
 
-You may use the integrated development environment (IDE) "VS Code" (download it from
+You may use the integrated development environment (IDE) "VS Code". Check your cpu (X86 or Arm64) and download it from
 
 https://code.visualstudio.com/download 
 

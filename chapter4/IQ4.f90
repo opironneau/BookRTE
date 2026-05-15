@@ -81,7 +81,7 @@
                 
             call cpu_time(t_start)
                 
-            call multiBlock(Te / 2.0_wp)
+            call multiBlock(Te / 2.0)
                 
             call cpu_time(t_end)
             print '(" Time CPU = ", F10.6)', t_end - t_start
