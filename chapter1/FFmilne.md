@@ -28,6 +28,7 @@ cout<<J0[]<<endl;
 ~~~~
 
 To compute $I(x,\mu)$ at some given $x,\mu$ one must approximate the Dirac mass at $\mu_s$ by an exponential and use the following when $\mu>0$
+
 $$
 I(x,\mu)\approx \int_0^x \frac1\mu e^{-\frac {|x-x'|}\mu}J_0(x')d x' +  c_s  e^{-\frac x{\mu_s}} e^{-\lambda(\mu-\mu_s)}
 /\int_0^1 e^{-\lambda(\mu-\mu_s)}d\mu.
@@ -46,9 +47,11 @@ for(mu=0.; mu<1;mu+=dmu)
 C = cs/C;
 ~~~
  When $\mu<0$,
+
 $$
 I(x,\mu)= -\int_x^1 \frac1\mu e^{\frac {|x-x'|}\mu}J_0(x')d x'.
 $$
+
 ~~~freefem
 // compute I from J0 when mu<0
 func real convoln(real xx){ return - int1d(Th)((x>xx)*exp((x-xx)/mu)*J0(x)/mu);}for(mu=0.03; mu<1;mu+=0.03){
@@ -66,4 +69,8 @@ The last chunk of printed data can be displayed as a surface $x,\mu \to I(x,\mu)
 splot "surfdata.txt" w l
 
 If gnuplot is not installed you can uses "brew install gnuplot" on the mac.
-As most of the radiance is into  the input $\text{C*exp(-lambda*(mu-mus)\^~2)*exp(-xx/mus)}$, you may set $C=0$ to see the rest of the signal.
+As most of the radiance is into  the input 
+
+$C*exp(-lambda*(mu-mus)\^~2)*exp(-xx/mus)$,
+
+ you may set $C=0$ to see the rest of the signal.
