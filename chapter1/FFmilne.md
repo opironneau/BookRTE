@@ -71,6 +71,6 @@ splot "surfdata.txt" w l
 If gnuplot is not installed you can uses "brew install gnuplot" on the mac.
 As most of the radiance is into  the input 
 
-$C*exp(-lambda*(mu-mus)\^~2)*exp(-xx/mus)$,
+C*exp(-lambda*(mu-mus)\^2)*exp(-xx/mus),
 
  you may set $C=0$ to see the rest of the signal.

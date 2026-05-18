@@ -1,11 +1,13 @@
 # Navier-Stokes Equations
 
 In chapter 4 we will compute the temperature in a water pond subject to wind and sunlight. We begiin witht he computation of the velocity field by solving
+
 $$
 \frac{\partial u}{\partial t}
 \partial_t{\bf u}+{\bf u}\cdot\nabla{\bf u}
 -\nu\Delta {\bf u}  -\nabla p =0,~~~\nabla\cdot{\bf u}=0~~~in ~ \Omega, ~~t>0.
 $$
+
 The initial velocity is given and the velocity on the surface is equal to the wind velocity. A no-slip condition is imposed on the boundary in contact with the ground: $u=v=0$.
 
 The domain is defined by 2 curves $t\to x(t),y(t)$
@@ -27,9 +29,11 @@ Uh u=1,v=0,uh,vh,ux,uy;
 real visc=0.05 ,eps=1.e-5, dt=0.02;// viscosity, pregularization and time step
 ~~~~
 A Characteristic Galerkin discretization is applied:
+
 $$
 \partial_t{\bf u}+{\bf u}\cdot\nabla{\bf u}|_{x,t}\approx \frac1{\delta t}[{\bf u}(x,t)-{\bf u}(x-{\bf u}(x,t-\delta t)\delta t,t-\delta t)]
 $$
+
 An implicit scheme used, leading to
 ~~~freefem
 for(int tstep=1;tstep<70;tstep++)
