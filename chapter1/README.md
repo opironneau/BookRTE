@@ -18,8 +18,7 @@ By the method of characteristics one shows that it is the solution of the integr
 $$
 J_0(x) = \frac12\int_0^1 E(|x-x'|)J_0(x')d x' + \frac{c_s}2 e^{-\frac{x}{\mu_s}}.
 $$
-
-To compute $I(x,\mu)$ at some given $x,\mu$ one must approximate the Dirac mass at $\mu_s$ by an exponential and use the following when $\mu>0$
+To compute $I(x,\mu)$ at some given $x,\mu$ one must approximate the Dirac mass at $\mu_s$ by an exponential and use the following when $\mu>0$,
 $$
 I(x,\mu)\approx \int_0^x \frac1\mu e^{-\frac {|x-x'|}\mu}J_0(x')d x' +  c_s  e^{-\frac x{\mu_s}} e^{-\lambda(\mu-\mu_s)}
 /\int_0^1 e^{-\lambda(\mu-\mu_s)}d\mu.
