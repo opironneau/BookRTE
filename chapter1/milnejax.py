@@ -1,5 +1,5 @@
-# filepath: milnejax/src/milnejax.py
-import jax
+# Solves Milne's Problem
+import jax # to speed-up runtime
 import jax.numpy as jnp
 import numpy as np
 import scipy.special as sc

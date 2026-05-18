@@ -1,14 +1,37 @@
-load "gsl"
-macro expintE1(t) gslsfexpintE1(t)// end of macro
-meshL Th = segment(20,[x]);
-fespace Vh(Th,P1);
-Vh J0=0, S;
-real cs=1, mus=1/sqrt(3.);
-func real E1B(real xx){ return int1d(Th)(expintE1(abs(x-xx))*S);}
+// Solves Milne problem by ISIF using freefem. See FFminle.md for details
 
+load "gsl" // gnu scientific library for E_1
+meshL Th = segment(80,[x]); // 20 segments for the altitude grid x in (0,1)
+fespace Vh(Th,P1);      // continuous pieccewise linear functions on (0,1)
+Vh J0=0;                // Declares J0  in the FEM space
+real cs=1, mus=1./sqrt(3.);
+func real E1B(real xx){ return int1d(Th)(gslsfexpintE1(abs(x-xx))*J0(x));}
+                        // computes int_0^1 E1(|x-xx|) S(x) dx. at xx
 for(int i=0; i<15;i++){ // ISIF
-    S = J0+cs/2 * exp(-x/mus);
-    J0= E1B(x)/2;
-    cout<<J0(0)<<endl;  // to see convergence
+    J0= E1B(x)/2 + cs/2 * exp(-x/mus); // computes expression at all x
+    cout<<J0(0)<<endl;  // to check convergence
 }
 cout<<J0[]<<endl;
+
+// compute I from J0
+real mu;
+func real convoln(real xx){ return - int1d(Th)((x>xx)*exp((x-xx)/mu)*J0(x)/mu);}
+func real convolp(real xx){ return  int1d(Th)((x<xx)*exp((x-xx)/mu)*J0(x)/mu);}
+Vh I ;
+cout<<endl;
+for(mu=-1; mu<-0.03;mu+=0.03){
+	for(real xx=0.;xx<1;xx+=0.03)
+		cout<<mu<<" "<<xx<<" "<<convoln(xx)<<endl;
+	cout<<endl;
+}
+
+real C=0, dmu=0.01, lambda=500;
+for(mu=0.; mu<1;mu+=dmu)
+	C += exp(-lambda*(mu-mus)^2)*dmu;
+C = cs/C;
+
+for(mu=0.03; mu<1;mu+=0.03){
+	for(real xx=0.;xx<1;xx+=0.03)
+		cout<<mu<<" "<<xx<<" "<<convolp(xx) + 0*C*exp(-lambda*(mu-mus)^2)*exp(-xx/mus)<<endl;
+	cout<<endl;
+}
