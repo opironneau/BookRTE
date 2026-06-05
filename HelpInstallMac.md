@@ -1,5 +1,8 @@
 # Tips to run the programs on a Mac OS
 
+All programs can be run from a terminal by calling the compiler followed by the name of the program.  But to modify and understand the program one is strongly encourage to use an integrated development environment (IDE).
+
+
 ## C++ Programs
 
 - Open Xcode, create a new "Project" select "command inline" give it a name etc.  When all is done a main.cpp is automatically included. Try to run it. If it works then drag a .cpp file from this archive next to the main.cpp. remove the main.cpp. It should run.
