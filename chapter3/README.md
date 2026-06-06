@@ -1,6 +1,7 @@
 # CHAPTER 3
 
 The RTE in 3 dimensions is
+The RTE in 3 dimensions is
 
 $$
 \frac1c\partial_t {I_\nu} + \omega\cdot\nabla {I_\nu}+\rho\kappa a_s{I_\nu} = {\frac{\rho\kappa a_s }{4\pi}\int_{S_2}}p_\nu(\omega,\omega'){I_\nu}(\omega'){d}\omega'
