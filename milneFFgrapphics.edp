@@ -1,0 +1,33 @@
+// Solves Milne problem by ISIF using freefem. See FFminle.md for details
+
+load "gsl" // gnu scientific library for E_1
+
+int n=3, b=1; // 1 is Dirac, 0 is Chandrasekhar
+border a1(t=0,1) {x=t; y=0;} 			// Define the boundaries of the domain
+border b1(t=0,2)  {x=1; y=t;}
+border c1(t=1,0) {x=t;y=2;}
+border c2(t=0,-1){x=t;y=2;}
+border d(t=2,0)  {x=-1; y=t;}
+border a2(t=-1,0){x=t;y=0;} 		// Then bluid a triangulation of the domain
+mesh Th=buildmesh(a1(10*n)+b1(10*n)+c1(10*n)+c2(10*n)+d(10*n)+a2(10*n));
+
+fespace Vh(Th,P1); // Let us use linear Lagrange triangular elements 
+Vh I,Ih, aux=0;  
+
+real eps=0.05, mus =1./sqrt(3.) , lam=12;	
+	
+func real JJ0(real yaux){return 0.5*int1d(Th,a1,a2)(I(x,yaux));}
+
+Vh IS = (x>0)*exp(-y/(x+0.001))*exp(-sqr((x-mus)*lam)) ; // Collimated light
+real w = sqrt(pi)/2/lam * ( erf(mus*lam) + erf((1-mus)*lam) ); // scales delta
+													// Set up the linear system
+problem A(I,Ih) = int2d(Th)(x*dy(I)*Ih + I*Ih 
+                + eps*x*x*(dy(I)*dy(Ih)+0.1*dx(I)*dx(Ih)) +eps*x*I*dy(Ih)) 
+	 	- int2d(Th)(aux*(Ih+eps*x*dy(Ih)))
+		+ on(a1,I=b*(x>0)*exp(-sqr((x-mus)*lam))) + on(c2, I=0);
+									// ISIF loop
+for(int i=0; i<15;i++){				// instantiating A solves the linear system
+		A; 	aux = JJ0(y) + (1-b)*w*exp(-y/mus)/2; 
+}
+I=I+(1-b)*IS;
+plot(I, dim=3, fill=true, value=true);
