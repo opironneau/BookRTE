@@ -33,7 +33,7 @@ gfortran myfile.f90 -o myprogram
   
   https://freefem.org/
   
-  See the section Assets (for Mac  it may be that the version is in the Assets of one  older release section).
+  See the section Assets (for Mac  if you have trouble installing the latest version try an earlier version is from the section "Assets" of an  older release).
 
 - Follow the instructions. On has to bypass Apple's security rules because freefem is not registered with Apple (it can't be because some shared libraries in Fortran).  Whenever Apple suggests to throw the file away, don't! see the "security" section in the system parameters (below the apple icon in the very top left menu bar) and keep on trying.
   

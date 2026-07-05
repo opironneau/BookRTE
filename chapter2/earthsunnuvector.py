@@ -1,44 +1,42 @@
-# Vectorized version of earthsunnu.py. Much faster but there is a small bug somwhere 
-# because it does not give exactly the same result
-# if you find the bug, tell me (olivier.pironneau@gmail.com)
+# Vectorized version of earthsunnu.py. Much faster
 
 import numpy as np
 import os
 import sys
 import time
 
-verbose =0
+verbose =0 # Set to =1 for detailed output during execution
 
 # Constants from original C++ code
-Ce = 2.0 # Infranred red intensity from earth
-Cs = 2e-6 # Collimated sunlight intensity
-drho = -0.7 # Gradient of density with altitude (negative for decreasing density)
-Zatmo = 1.2 # Top of atmosphere
-Z = Zatmo * (1.0 + drho * Zatmo / 2.0) # optical thickness
-Bscale = 1.4744e-8 # Scale factor for blackbody radiation
-Tscale = 4798.0 # Scale factor for temperature
+Ce = 2.0 # Infrared intensity
+Cs = 2e-6 # Solar intensity of collimated light
+drho = -0.7 # gradient of density with altitude
+Zatmo = 1.2 #Top of Atmosphere
+Z = Zatmo * (1.0 + drho * Zatmo / 2.0) # computational TAO due to optical thickness
+Bscale = 1.4744e-8 # scaling factor for I and J0...
+Tscale = 4798.0 #scaling factor for the temperature
 pi = np.pi
-stefan = pi**4 / 15.0
+stefan = pi**4 / 15.0 # Stefan constant
 
 Te = (273.0 + 18.0) / Tscale
 Ts = 5798.0 / Tscale
-q0 = -0.3 # Albedo of the earthIntensity of albedo from earth
-mus = 0.5 # Collimated light direction (cosine)
-z1 = Z * 0.5 # cloud is between z1 and z2
-z2 = Z * 0.7
-z3 = Z * 0.8 # altitude beyond which there is Rayleigh scattering for frenquence in (nu1,nu2)
-nu1 = 0.5
+q0 = -0.3  # Albedo intensity
+mus = 0.5  # Angle of collimated light
+z1 = Z * 0.5 # Cloud base
+z2 = Z * 0.7 # Cloud top
+z3 = Z * 0.8 # Rayleigh scttering base
+nu1 = 0.5 # cloud is opaque between nu1 and nu2
 nu2 = 1.0
-lambda_val = 0.5  # Cloud intensity parameter
+lambda_val = 0.5  # Cloud opacity parameter
 
 # Grid parameters
-Nz = 40 # Nb of discretization points in altitude
+Nz = 40 # Number of discretization points in the vertical direction
 dz = Z / (Nz - 1)
 kmax = 8 # Number of ISIF iterations
-newton = 50 # max nb of newton iterations (never reached)
-epsdycho = 1e-4 # stopping precisssion for dichotomy
-epsnewton = 1e-10 # stopping precisssion for Newton
-kappamin = 0.001 # smallest allowed opacity
+newton = 50 # Max number of Newton iterations
+epsdycho = 1e-4  # Precision for dichotomy method
+epsnewton = 1e-10 # Precision for Newton method
+kappamin = 0.001 # Avoid zero opacity
 
 # Initialize arrays
 nu = []
@@ -75,7 +73,7 @@ def scloud(z, zp):  # integral of cloud() over z,zp (zp>z)
 # Exponential integrals (optimized for speed)
 def expint_E1(t):
     t1 = abs(t)+1e-10
-    ak = t1
+    ak = t1 * 1.0 # to force ak to be an independent copy
     soNtaue =- 0.577215664901533 - np.log(t1) + ak
     for k in range(2, 10):
         ak *= -t1 * (k - 1) / (k * k)
@@ -116,7 +114,7 @@ def readkappa(mykappafile):
             nu.append(3.0/wavel)
             j += 1
     print(f"Number of frequencies {j}")
-    
+    dnu = np.diff(nu)
     auxe = 0.0
     auxs = 0.0
     for k in range(1, j):
@@ -147,7 +145,6 @@ def updateJ():
         J0z3 = c0 * expint_E2(kappanuj * scloud(0.0, z_mesh)) / 2.0
         J0z4 = np.dot(expint_E1(kappanuj * scloud(zp_grid, z_grid) + 0.5 * dz) ,S)*dz/2 
         J0[jnu] = J0z1+J0z2+J0z3 +J0z4
-    return 0
 
 # Root function for dychotomy
 def root(rhs, Tin, i):
@@ -236,7 +233,8 @@ def genT():
                 T[i] = T0 + presfunc / deriv
             
             if verbose:
-                print(f"{i} T={T[i]} residue={presfunc} deriv={deriv} Tstefan={np.sqrt(np.sqrt(rhs * 15 * 2)) / 3.1416}")
+                print(f"{i} T={T[i]} residue={presfunc} deriv={deriv} \
+                      Tstefan={np.sqrt(np.sqrt(rhs * 15 * 2)) / 3.1416}")
         
         if inewton >= newton:
             print("Newton precision doubtful")
@@ -261,7 +259,7 @@ def backtoz(z):
 
 # Main function
 def main():
-    global jmax,J0
+    global jmax,J0, nu,kappanu
     jmax = readkappa(mykappafile)
     J0 =np.zeros((jmax,Nz))
 

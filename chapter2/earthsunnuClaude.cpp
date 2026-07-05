@@ -28,11 +28,12 @@ const double z1 = Z*0.5, z2=Z*0.7, z3=Z*0.8;  // altitudes for scattering
 const double nu1=0.5,nu2=1; // range of Rayleigh scattering
 double lambda=0.; // for clouds
 
-const bool verbose=false;
+const bool verbose=true;
 const int Nz=100; // nb points in tau
 const double dz=Z/(Nz-1);
 const int kmax=10;  // nb fixed point iterations
-const int jmaxmax=600; // max of max nb of points for integration in nu range
+const int jmaxmax=4000; // max of max nb of points for integration in nu range
+                         // (raised from 600 to fit the denser _kappa_dense.txt grid)
 const int newton = 50; // to compute the temperature from int k*Botlzmann=int k*Imean
 const double epsdycho=1e-4, epsnewton=1.e-10;  // precision for dychotomy & Newton
 const double kappamin=0.001;  // if kappa read is too small max it with kappamin
@@ -41,7 +42,7 @@ double  nu[jmaxmax],kappanu[jmaxmax];      // uneven discretization of [numin,nu
 double  J0[jmaxmax][Nz], J0old[jmaxmax][Nz],T[Nz];// mean radiation and temperature
 
 string basedir("/Users/pironneau/Dropbox/aranger/TeX2026/BookVRTE/prog2/greenhouse4/");
-string mykappafile(basedir+"_kappa.txt");
+string mykappafile(basedir+"_kappa_dense.txt"); // denser grid: resolves the solar peak properly (see _kappa.txt for the original, coarser file)
 string myresulttemperature(basedir+"temperaturec");
 string myresultmeanintensity(basedir+"imean0");
 int jmax;
@@ -100,12 +101,12 @@ int readkappa(string mykappafile){
     if (!kappafile) {
         throw std::runtime_error("Cannot open file: " + mykappafile);
     }
-    int j=-1;
+    int j=0;
     double wavel, kappaux;
-    while((j++<=jmaxmax-2)&&(!kappafile.eof())){
-        kappafile >> wavel >>kappaux;
+    while(j<=jmaxmax-2 && (kappafile >> wavel >> kappaux)){
         kappanu[j]  = fmax(kappaux,kappamin);
         nu[j]=3/wavel;
+        j++;
      }
     kappafile.close();//kappafileo.close();
     cout<<"Number of frequencies "<<j<<endl;
@@ -259,7 +260,7 @@ int main(int argc, const char * argv[]) {
     jmax=readkappa(mykappafile);
     
 //    { int K=2;
-    for(int K=0;K<2;K++){
+    for(int K=0;K<3;K++){
         for(int j=0;j<jmax;j++)
             if (K==1){
                 if((nu[j]>3./18)&&(nu[j]<3./14))

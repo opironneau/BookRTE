@@ -1,0 +1,250 @@
+//Solve for I and Q when radiative index is both non-constant and has a discontinuity at F
+// But it is the grey case, kappa=0.5 rho
+load "lapack"
+
+verbosity=0;
+int n=2, N=10;  // triangulation and basis size
+real F=0.5,  // n-discontinuity position
+	kappa=0.5, // extinction
+    as=0.5,  // scattering coef
+	beta=0.5,  // Rayleigh proportion
+    kappas=kappa * as, 
+    kappaa=kappa*(1-as);
+real stefan=pi^4/15;
+real Te = (18+273.)/4798; // Earth temperature
+real Ce=2.4;  // earth power light
+macro I0(X)(stefan*Ce*Te^4 * exp(-100*sqr(X-0.3)))// collimated light
+
+// One dimensional mesh in mu direction
+border segx(t=-1,1){x=t;y=F;z=0;}
+meshL Sgxh = buildmeshL(segx(20*n));
+fespace Xh(Sgxh,P1);
+
+// One dimensional mesh in z direction
+border segy(t=0,1){x=0;y=t;z=0;}
+meshL Sgyh = buildmeshL(segy(10*n));
+fespace Yh(Sgyh,P1);
+Yh T=Te*(1-0.7*y)/2;
+
+real a=0.1, aF=-0.3; // refractve index is 1+a*z + discontinuity
+Yh nn=1+a*y+aF*(y>F); // Refractive index
+Yh dlognn=a; 
+real drho=-0.7; // - gradient of density
+Yh kappay= 1+drho*y*(y>F); // Density (altitude effect on kappa)	
+
+border a11(t=0,1) {x=t; y=0;label=1;}
+border b1(t=0,F)  {x=1; y=t;label=2;}
+border c11(t=1,0) {x=t;y=F;label=3;}
+border c12(t=0,-1){x=t;y=F;label=4;}
+border d1(t=F,0)  {x=-1; y=t;label=5;}
+border a12a(t=-1,-0.1){x=t;y=0;label=6;}
+border a12b(t=-0.1,0){x=t;y=0;label=66;}
+//mesh Th1=buildmesh(a11(10*n)+b1(10*n)+c11(10*n)+c12(10*n)+d1(10*n)+a12(10*n));
+border a21(t=0,1) {x=t; y=F;label=7;}
+border b2(t=F,1)  {x=1; y=t;label=8;}
+border c21(t=1,0) {x=t;y=1;label=9;}
+border c22(t=0,-1){x=t;y=1;label=10;}
+border d2(t=1,F)  {x=-1; y=t; label=11;}
+border a22(t=-1,0){x=t;y=F;label=12;}
+//mesh Th2=buildmesh(a21(10*n)+b2(10*n)+c21(10*n)+c22(10*n)+d2(10*n)+a22(10*n));
+// Triangulation of the (mu,z) domain
+mesh Th3 = buildmesh(a11(10*n)+b1(10*n)+d1(10*n)+a12a(10*n)+a12b(4*n)
+			+a21(10*n)+b2(10*n)+c21(10*n)+c22(10*n)+d2(10*n)+a22(10*n));
+plot(Th3,wait=0);
+fespace Wh(Th3,P1);
+Wh I,Q,Ih,Qh;
+
+macro PP(x) (1.5*x*x-0.5) //
+macro BB(T) (stefan*sqr(sqr(abs(T)))) //
+func real QP(real yaux){return 0.5*int1d(Th3,1,6,66)(PP(x)*I(x,yaux)-(1-PP(x))*Q(x,yaux));}
+func real J0(real yaux){return 0.5*int1d(Th3,1,6,66)(I(x,yaux));}
+
+/////////////////////////////// Adapt the Mesh //////////////////
+real eps=0.0005; // SUPG parameter
+
+// L oprator fore the PDEs
+macro operator(I,Ih)((x*dy(I)+kappay*kappa*I+(x*x+sqr(y-F)>0.04)*(1e-3+dlognn)*(1-x*x)*dx(I))*(Ih+eps*(x*dy(Ih)
+						+kappay*kappa*Ih+dlognn*(-2*x*Ih+(1-x*x)*dx(Ih))))    ) //
+
+problem test([I,Q],[Ih,Qh]) 
+	= int2d(Th3) (operator(I,Ih)+operator(Q,Qh))
+	-	 int2d(Th3)(kappay*(kappa*BB(T)/sqr(nn)*Ih
+                   + beta*kappas/2* ( PP(x)*QP(y)*(Ih -(1-PP(x))*Qh))))		
+	+ on(1,I=I0(x)/sqr(nn),Q=0)+on(10,I=0,Q=0)
+;
+
+///////////// Solve the problem on a coarse mesh and then adapt the mesh //////
+for(int k=0;k<3;k++){ test;} // QP depends on I and Q, hence 3 iterations
+Ih=I(-x,y);
+Th3 = adaptmesh(Th3,I,Q,Ih,verbosity=1, abserror=1, nbjacoby=2,
+    err=0.003, nbvx=5000, omega=1.8, ratio=1.8, nbsmooth=3,
+    splitpbedge=1, maxsubdiv=5, rescaling=1);
+plot(Th3,wait=0);	
+int rg1=Th3(0,F-0.1).region;
+int rg2=Th3(0,F+0.1).region;
+//  2 meshes conform. 
+mesh Th1=trunc(Th3,region==rg1);
+mesh Th2=trunc(Th3,region==rg2);
+I=I;Q=Q;
+////////////////////////////////// End Mesh Adapt ///////////////////
+
+//eps/=10;
+
+fespace V1h(Th1,P1);
+fespace V2h(Th2,P1);
+
+V1h I1,Q1,I1h,Q1h,T1=Te*(1-0.7*y);
+V2h I2,Q2,I2h,Q2h,T2=Te*(1-0.7*y);
+
+func real J01(real yaux){return 0.5*int1d(Th1,1,6,66)(I1(x,yaux));}
+func real J02(real yaux){return 0.5*int1d(Th2,7,12)(I2(x,yaux));}
+func real QP1(real yaux){return 0.5*int1d(Th1,1,6,66)(PP(x)*I1(x,yaux)-(1-PP(x))*Q1(x,yaux));}
+func real QP2(real yaux){return 0.5*int1d(Th2,7,12)(PP(x)*I2(x,yaux)-(1-PP(x))*Q2(x,yaux));}
+
+// Prepare for Frsnel conditions
+Xh[int] Xpm(4), Ypm(4), Xmp(4), Ymp(4);
+real nnpm=nn(0,F+0.01,0)/nn(0,F-0.01,0); 
+real mucn2=1-sqr(1/nnpm);
+Xh  etapm = sign(x)*sqrt(max(0.,1-sqr(nnpm)*(1-x*x))),
+  	aux1= sqr((abs(x)-nnpm*etapm)/max(0.001,abs(x)+nnpm*etapm)), 
+	aux2= sqr((nnpm*abs(x)-etapm)/max(0.001,nnpm*abs(x)+etapm));
+	
+Xpm[0] = ((nnpm<1)+(nnpm>=1)*(x*x>mucn2))*(aux1+aux2)/2 + (nnpm>=1)*(x*x<mucn2) ;
+Xpm[3]=Xpm[0];
+Xpm[1]=((nnpm<1)+(nnpm>=1)*(x*x>mucn2))* (aux1-aux2)/2;
+Xpm[2]=Xpm[1];
+aux1=1/max(0.001,sqr(abs(x)+nnpm*etapm));
+aux2=1/max(0.001,sqr(nnpm*abs(x)+etapm));
+Ypm[0] = ((nnpm<1)+(nnpm>=1)*(x*x>mucn2))* 2*nnpm*abs(x)*etapm*(aux1+aux2);
+Ypm[3] = Ypm[0];
+Ypm[1] =  ((nnpm<1)+(nnpm>=1)*(x*x>mucn2))* 2*nnpm*abs(x)*etapm*(aux1-aux2);
+Ypm[2]=Ypm[1];
+
+real nnmp=1/nnpm;
+mucn2=1-sqr(1/nnmp);
+Xh  etamp = sign(x)*sqrt(max(0.,1-sqr(nnmp)*(1-x*x)));
+
+aux1= sqr((abs(x)-nnmp*etamp)/max(0.001,abs(x)+nnmp*etamp)); 
+aux2= sqr((nnmp*abs(x)-etamp)/max(0.001,nnmp*abs(x)+etamp));
+Xmp[0] = ((nnmp<1)+(nnmp>=1)*(x*x>mucn2))*(aux1+aux2)/2  + (nnmp>=1)*(x*x<mucn2);
+Xmp[3]=Xmp[0];
+Xmp[1]=((nnmp<1)+(nnmp>=1)*(x*x>mucn2))*(aux1-aux2)/2;
+Xmp[2]=Xmp[1];
+aux1=1/max(0.001,sqr(abs(x)+nnmp*etamp));
+aux2=1/max(0.001,sqr(nnmp*abs(x)+etamp));
+Ymp[0] =((nnmp<1)+(nnmp>=1)*(x*x>mucn2))* 2*nnmp*abs(x)*etamp*(aux1+aux2);
+Ymp[3] = Ymp[0];
+Ymp[1] = ((nnmp<1)+(nnmp>=1)*(x*x>mucn2))* 2*nnmp*abs(x)*etamp*(aux1-aux2);
+Ymp[2]=Ymp[1];
+
+// Fresnel conditions are imposed by a 2x2 block linear system (A,B,C,D)
+varf AA1(I1,I1h) = int2d(Th1)(operator(I1,I1h) + 0.1*dy(I1)*dy(I1h))
+               + on(1,66, I1=0)+on(12, I1=exp(-20*((x+n/real(N))^2)) ); 
+matrix M1  =  AA1(V1h,V1h) ;
+
+V1h[int] N1(N+1);
+for(n=0;n<N+1;n++){
+	real[int] aux = AA1(0,V1h);
+	N1[n][]=M1^-1*aux;
+}
+
+varf AA2(I2,I2h) = int2d(Th2)(operator(I2,I2h)+ 0.1*dy(I2)*dy(I2h))
+                + on(7, I2=exp(-20*((x-n/real(N))^2)))+on(10,12, I2=0 );
+matrix M2  =  AA2(V2h,V2h) ;
+
+V2h[int] N2(N+1);
+for(n=0;n<N+1;n++){
+	real[int] aux = AA2(0,V2h);
+	N2[n][]=M2^-1*aux;
+}
+
+real[int,int] A11(N+1,N+1),B11(N+1,N+1),C11(N+1,N+1),D11(N+1,N+1);
+real[int,int] A12(N+1,N+1),B12(N+1,N+1),C12(N+1,N+1),D12(N+1,N+1);
+real[int,int] A21(N+1,N+1),B21(N+1,N+1),C21(N+1,N+1),D21(N+1,N+1);
+real[int,int] A22(N+1,N+1),B22(N+1,N+1),C22(N+1,N+1),D22(N+1,N+1);
+for(n=0;n<=N;n++)
+    for(int m=0;m<=N;m++){
+        A11(m,n) =  int1d(Th1,12)(N1[n]*N1[m]) - int1d(Th1,12)(Xmp[0](-x,y)*N1[n](-x,y)*N1[m]);
+        A12(m,n) = -int1d(Th1,12)( Xmp[1](-x,y)*N1[n](-x,y)*N1[m]);
+        A21(m,n) = -int1d(Th1,12)( Xmp[2](-x,y)*N1[n](-x,y)*N1[m]);
+        A22(m,n) =  int1d(Th1,12)(N1[n]*N1[m]) - int1d(Th1,12)(Xmp[3](-x,y)*N1[n](-x,y)*N1[m]);
+		B11(m,n) = -int1d(Th1,12)(Ymp[0](-x,y)*N2[n](etamp,y)*N1[m]);
+		B12(m,n) = -int1d(Th1,12)(Ymp[1](-x,y)*N2[n](etamp,y)*N1[m]);
+		B21(m,n) = -int1d(Th1,12)(Ymp[2](-x,y)*N2[n](etamp,y)*N1[m]);
+		B22(m,n) = -int1d(Th1,12)(Ymp[3](-x,y)*N2[n](etamp,y)*N1[m]);
+		C11(m,n) = -int1d(Th2,7)(Ypm[0]*N1[n](etapm,y)*N2[m]);
+		C12(m,n) = -int1d(Th2,7)(Ypm[1]*N1[n](etapm,y)*N2[m]);
+		C21(m,n) = -int1d(Th2,7)(Ypm[2]*N1[n](etapm,y)*N2[m]);
+		C22(m,n) = -int1d(Th2,7)(Ypm[3]*N1[n](etapm,y)*N2[m]);
+		D11(m,n) =  int1d(Th2,7)(N2[m]*N2[n])-int1d(Th2,7)(Xpm[0]*N2[n](-x,y)*N2[m]);
+		D12(m,n) = -int1d(Th2,7)(Xpm[1]*N2[n](-x,y)*N2[m]);
+		D21(m,n) = -int1d(Th2,7)(Xpm[2]*N2[n](-x,y)*N2[m]);
+		D22(m,n) =  int1d(Th2,7)(N2[m]*N2[n])-int1d(Th2,7)(Xpm[3]*N2[n](-x,y)*N2[m]);
+}
+matrix M=[[A11,A12,B11,B12],[A21,A22,B21,B22],[C11,C12,D11,D12],[C21,C22,D21,D22]];
+set(M, solver=UMFPACK);
+
+varf aa1(I1,I1h)  =  int2d(Th1)(kappay*(kappa*BB(T)/sqr(nn)*(I1h+eps*x*dy(I1h)) 
+                   + beta*kappas/2* ( PP(x)*QP1(y)*(I1h+eps*x*dy(I1h)) 
+                               ) )) + on(1, I1=I0(x)/sqr(nn))+on(12, I1=0 );
+varf aa2(I2,I2h)  = 	 int2d(Th2)(kappay*(kappa*BB(T)/sqr(nn)*(I2h+eps*x*dy(I2h)) 
+                   + beta*kappas/2* ( PP(x)*QP2(y)*(I2h+eps*x*dy(I2h)) 
+                               ) ) ) + on(7,10, I2=0 );								  								  
+varf bb1(Q1,Q1h)  =  -int2d(Th1)(kappay*beta*kappas/2* (1-PP(x))*QP1(y)*(Q1h+eps*x*dy(Q1h)) )
+								   + on(1,12, Q1=0 );
+varf bb2(Q2,Q2h)  =  -int2d(Th2)(kappay*beta*kappas/2* (1-PP(x))*QP2(y)*(Q2h+eps*x*dy(Q2h))) 
+									  + on(7,10, Q2=0 );
+V1h I01h,Q01h; 
+V2h I02h,Q02h; 
+
+real[int] f1(N+1),g1(N+1),f2(N+1),g2(N+1),rh1(N+1),sh1(N+1),rh2(N+1),sh2(N+1);
+
+/////////////////////////////////
+for(int i=0; i<6;i++){ // Iterations on the source
+//////////////////// Compute I
+	real[int] aux1 = aa1(0,V1h);
+	I01h[] = M1^-1*aux1;
+	real[int] aux2 = aa2(0,V2h);
+	I02h[] = M2^-1*aux2;
+	real[int] aux3 = bb1(0,V1h);
+	Q01h[] = M1^-1*aux3;
+	real[int] aux4 = bb2(0,V2h);
+	Q02h[] = M2^-1*aux4;
+
+	for(int k=0;k<N+1;k++){
+		rh1[k] = -int1d(Th1,12)(I01h*N1[k])+int1d(Th2,12)((Xmp[0](-x,y)*I01h(-x,y)+Xmp[1](-x,y)*Q01h(-x,y)
+							+Ymp[0](-x,y)*I02h(etamp,y) +Ymp[1](-x,y)*Q02h(etamp,y))*N1[k]);
+		sh1[k] = -int1d(Th1,12)(Q01h*N1[k])+int1d(Th2,12)((Xmp[2](-x,y)*I01h(-x,y)+Xmp[3](-x,y)*Q01h(-x,y)
+							+Ymp[2](-x,y)*I02h(etamp,y) +Ymp[3](-x,y)*Q02h(etamp,y))*N1[k]);
+		rh2[k] = -int1d(Th2,7)(I02h*N2[k]) + int1d(Th2,7)((Xpm[0]*I02h(-x,y)+Xpm[1]*Q02h(-x,y)
+							+ Ypm[0]*I01h(etapm,y) + Ypm[1]*Q01h(etapm,y))*N2[k]);
+		sh2[k] = -int1d(Th2,7)(Q02h*N2[k])+int1d(Th2,7)((Xmp[2]*I02h(-x,y)+Xmp[3]*Q02h(-x,y)
+							+ Ymp[2]*I01h(etamp,y)+Ymp[3]*Q01h(etamp,y))*N2[k]);
+	}	
+	real[int] rh=[rh1,sh1,rh2,sh2];
+	real[int] sh=M^-1*rh;
+	[f1,g1,f2,g2]=sh;
+//	cout<<f1<<g1<<f2<<g2<<endl;
+	I1=I01h; I2=I02h;
+	Q1=Q01h; Q2=Q02h;
+	for(int k=0;k<=N;k++){
+		 I1 = I1 + f1[k]*N1[k];
+		 I2 = I2 + f2[k]*N2[k];
+		 Q1 = Q1 + g1[k]*N1[k];
+		 Q2 = Q2 + g2[k]*N2[k];
+	 }
+//	Q1=Q1*(x*x+sqr(y-F)>0.005);
+	I1 = max(I1,0.);
+	I2=max(I2,0.);
+	Q1=min(Q1,0);
+	plot(I1,I2,value=1,fill=1,wait=0,nbiso=50, cmm="I"+i);
+	plot(Q1,Q2,value=1,fill=1,wait=0,nbiso=50, cmm="Q"+i);
+////////////////////////// Update T
+	T1=sqrt(nn*sqrt( J01(y)/stefan ));
+	T2=sqrt(nn*sqrt( J02(y)/stefan ));
+	T=sqrt(nn*sqrt( abs((y<F)*J01(y)+(y>F)*J02(y))/stefan ));
+} // End iterations on the source
+	
+for(real y1=0;y1<1; y1+=0.05) cout << y1<<" "<<T(0.,y1,0.)*4798-273 <<endl;
+
+plot(T1,T2,cmm="T", value=1);

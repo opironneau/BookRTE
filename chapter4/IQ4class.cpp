@@ -2,7 +2,11 @@
 //  Created by Olivier Pironneau on 02/05/2026.
 //  used in chapter 4
 //  This program is the same as IQchap4.cpp but C++ classes to improve readibility
-//  A factor of 2 in speed is lost because of the arrays are X<vector<vector<double>> instead of X[][]
+//  A factor of 2 in speed is lost because of the arrays are X<vector<vector<double>> 
+//  instead of X[][] see the IQ4classCursor.cpp for a solution
+
+// compile with g++ -O3 -std=c++17 -DIQ4_HAVE_GSL=0 -o IQ4class IQ4classGemini.cpp 
+
 
 #include <vector>
 #include <string>
@@ -28,7 +32,7 @@ namespace physics{
     const double nuWaterS = 3./20, nuWaterm = 3./10, nuWaterM = 3./1; // frequency range of water vapor absorption
     const double cloud = 1.5; // strength of cloud in (zcloudm,zcloudM)
     double zcloudm = 0.4, zcloudM = 0.7, zRayleigh = 0.8; // Rayleigh scatt is applied above zRayleigh
-    const double CO2m=3./18, CO2M=3./14, dark=0.2; // ghg C02 opaque for nu in (CO2m,CO2M)
+    const double CO2m=3./18, CO2M=3./14, dark=0.2; // C02 is opaque for nu in (CO2m,CO2M)
 }
 
 namespace algo{

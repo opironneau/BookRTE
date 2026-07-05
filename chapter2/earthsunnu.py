@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.integrate import quad
 import os
 import sys
 import time
@@ -127,8 +126,8 @@ def updateJ():
     for jnu in range(jmax):
         kappanuj = kappanu[jnu]
         nuj = nu[jnu]
-        bearthnu = Ce * Bearth(nu[jnu])
-        bsunnu = Cs * Bsun(nu[jnu])
+        bearthnu = Ce * Bearth(nuj)
+        bsunnu = Cs * Bsun(nuj)
         c0 = -q0 * bsunnu * mus * np.exp(-scloud(0.0, Z) * kappanuj / mus)
         
         for i in range(Nz):
@@ -151,11 +150,11 @@ def updateJ():
             J0[jnu][i] = J0z1+J0z2+J0z3+J0z4
 
 # Root function for dychotomy
-def root(rhs, T0, i):
+def root(rhs, Tin, i):
     myeq = -rhs
     for j in range(1, jmax):
-        myeq += (1.0 - ascat(i * Z / (Nz - 1.0), nu[j])) * kappanu[j] \
-            * BB((nu[j] + nu[j-1]) / 2.0, T0) * (nu[j] - nu[j-1])
+        myeq += (1.0 - ascat(i * dz, nu[j])) * kappanu[j] \
+            * BB((nu[j] + nu[j-1]) / 2.0, Tin) * (nu[j] - nu[j-1])
     return myeq
 
 # RHS for temperature equation
@@ -291,18 +290,13 @@ def main():
                 z = i * dz
                 print(f"{backtoz(z):.4f} {T[i] * Tscale - 273:.4f}")
             
-            for i in range(1, Nz):
+            for i in range(Nz):
                 resultfile.write(f"{backtoz(i * dz):.4f} {T[i] * Tscale - 273:.4f}\n")
         
         rb = Cs * stefan * (Ts**4)
         for j in range(jmax):
             rb -= J0[j][Nz-1] * (nu[j] - nu[j-1])
         print(f" Radiation Budget {rb}")
-
-# Helper function to get ascat(z, nu)
-#def as_func(z, nu):
- #   return 0.3 + 0.3 * (z2 - z) * (z - z1) * (z > z1) * (z < z2) * 4.0 / (z1 - z2) + \
-  #         0.3 * (nu < nu2) * (nu > nu1) * (4.0 * (nu - nu1) * (nu - nu2) / (nu2 - nu1))**2 * (z > z3)
 
 if __name__ == "__main__":
     main()

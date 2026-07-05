@@ -1,3 +1,7 @@
+// I-Q VRRTE Handles continuous refractive index and constant kappa
+// No albedo
+// See same file with .md suffix for more explanations
+// See in Chapter 7 for the same using DG and .md for more expanations
 real Z=1.2;
 real stefan=pi^4/15;
 real Te = (18+273.)/4798, Ts = 5800./4798;
