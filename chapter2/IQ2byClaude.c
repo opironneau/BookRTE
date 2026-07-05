@@ -1,0 +1,435 @@
+/* ============================================================================
+ * rt_slab.c
+ *
+ * Lambda-iteration solver for monochromatic radiative transfer + radiative
+ * equilibrium in a plane-parallel slab, implementing:
+ *
+ *   0. J0^0(nu,z) = 0,   m = 0
+ *   1. Find T^m(z) such that   Int_0^N sigma_a(nu) B_nu(T^m)     dnu
+ *                             = Int_0^N sigma_a(nu) J0^m(nu,z)   dnu
+ *   2. c0^m(nu) = -q0*mu_s*c_s*B_nu(T_s)*exp(-kappa_nu*Z/mu_s)
+ *                 -q0*Int_0^Z E2(kappa_nu*z)*[sigma_a*B_nu(T^m(z))
+ *                                              + sigma_s*J0^m(nu,z)] dz
+ *   3. J0^{m+1}(nu,z) = (c'_e/2) B_nu(T_e) E3(kappa_nu*z)
+ *                     +  (c0^m/2)          E2(kappa_nu*z)
+ *                     +  (c_s/2) B_nu(T_s) sigma_s exp(-kappa_nu*(Z-z)/mu_s)
+ *                     +  (1/2) Int_0^Z E1(kappa_nu*|z'-z|)
+ *                                [sigma_a*B_nu(T^m(z')) + sigma_s*J0^m(nu,z')] dz'
+ *      m <- m+1, goto 1.
+ *
+ * B_nu(T) = nu^3 / (exp(nu/T) - 1)   (h = k_B = c = 1 normalisation)
+ *
+ * kappa_nu is read from "_kappa.txt" (columns: 3/nu, kappa_nu), linearly
+ * interpolated on the tabulated grid (flat extrapolation outside the
+ * tabulated range).  sigma_a = 0.7*kappa_nu, sigma_s = 0.3*kappa_nu.
+ *
+ * Integrals over nu in (0,N) and over z in (0,Z) use the trapezoidal rule.
+ * E1(x) ~ -ln(x) as x->0, so the diagonal term of the z'-integral in step 3
+ * (z'=z) is regularised analytically using the exact identity
+ *
+ *      Int_0^a E1(k u) du = (1/k) [1 - E2(k a)]
+ *
+ * (interior points: two-sided cell of half-width h/2 on each side, factor 2;
+ *  boundary points z=0,Z: one-sided cell of width h/2, factor 1), so the
+ * weakly (integrably) singular kernel needs no ad-hoc cutoff.
+ *
+ * kappa_nu (hence sigma_a,sigma_s) and the z-grid are independent of the
+ * outer iteration m, so all exponential-integral kernels (E1 matrix, E2/E3
+ * vectors, direct-beam attenuation factors) are precomputed once per
+ * frequency before the m-loop; each Lambda iteration then only needs cheap
+ * matrix-vector sums.
+ *
+ * Compile:  gcc -O2 -o rt_slab rt_slab.c -lm
+ * Run:      ./rt_slab [path/to/_kappa.txt]
+ * ==========================================================================*/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <string.h>
+
+/* ---------------------------- problem parameters ------------------------ */
+#define Z_DOM      1.2
+#define NU_MAX     250.0
+#define MU_S       0.5
+#define Q0        (-0.25)
+#define C_S        2.0e-6
+#define CE_PRIME   2.0
+#define T_E       ((273.0 + 18.0) / 4798.0)
+#define T_S       (5800.0 / 4798.0)
+
+/* ---------------------------- discretisation ----------------------------- */
+#define NZ          101       /* number of z grid points, uniform on [0,Z]  */
+#define MAXIT       60         /* max outer (Lambda) iterations             */
+#define TOL         1.0e-8     /* convergence tol: max relative change of J0*/
+#define BISECT_IT   80         /* bisection iterations for T-solve          */
+#define T_LO        1.0e-6
+#define T_HI        3.0
+
+static const double EULER_GAMMA = 0.5772156649015329;
+
+/* ============================== exponential integrals =================== */
+
+/* E1(x) for x>0 : series for x<1, Lentz continued fraction for x>=1 */
+static double E1_func(double x)
+{
+    if (x < 1.0) {
+        double val = -EULER_GAMMA - log(x);
+        double xk = x;
+        double kfact = 1.0;
+        int k;
+        for (k = 1; k <= 100; k++) {
+            double t = xk / (k * kfact);
+            if (k % 2 == 1) val += t; else val -= t;
+            if (k > 3 && fabs(t) < 1e-17 * fabs(val)) break;
+            xk *= x;
+            kfact *= (double)(k + 1);
+        }
+        return val;
+    } else {
+        /* modified Lentz's algorithm for the continued fraction
+              E1(x) = exp(-x) * 1/(x+1-  1^2/(x+3-  2^2/(x+5- ...))) */
+        const double tiny = 1.0e-300;
+        double b = x + 1.0;
+        double c = 1.0 / tiny;
+        double d = 1.0 / b;
+        double hh = d;
+        int i;
+        for (i = 1; i <= 200; i++) {
+            double an = -(double)i * (double)i;
+            b += 2.0;
+            d = 1.0 / (an * d + b);
+            c = b + an / c;
+            double del = c * d;
+            hh *= del;
+            if (fabs(del - 1.0) < 1.0e-15) break;
+        }
+        return hh * exp(-x);
+    }
+}
+
+/* Returns E1,E2,E3 at x>0 via recurrence E_{n+1}(x)=[exp(-x)-x*E_n(x)]/n */
+static void expint123(double x, double *e1, double *e2, double *e3)
+{
+    double E1v = E1_func(x);
+    double ex = exp(-x);
+    double E2v = ex - x * E1v;
+    double E3v = 0.5 * (ex - x * E2v);
+    *e1 = E1v; *e2 = E2v; *e3 = E3v;
+}
+
+/* E2(x),E3(x) only, valid for x>=0 (x=0 handled directly, no log singularity) */
+static void expint23(double x, double *e2, double *e3)
+{
+    if (x <= 0.0) { *e2 = 1.0; *e3 = 0.5; return; }
+    double e1, e2v, e3v;
+    expint123(x, &e1, &e2v, &e3v);
+    *e2 = e2v; *e3 = e3v;
+}
+
+/* ---- exact antiderivatives used to integrate the E1(kappa*u) kernel
+ *      against a piecewise-LINEAR source function, eliminating the
+ *      integrable log singularity analytically (no ad-hoc regularisation):
+ *
+ *   G0(u) = Int E1(kappa u) du = -E2(kappa u)/kappa
+ *   G1(u) = Int u E1(kappa u) du = -(u/kappa) E2(kappa u) - E3(kappa u)/kappa^2
+ *
+ * (from E2' = -E1 and integration by parts using E3' = -E2).  Both G0,G1
+ * are finite at u=0 since E2(0)=1, E3(0)=1/2 are finite -- only E1 itself
+ * diverges (logarithmically) at u=0.
+ *
+ * For one grid segment [z_k,z_k+1] lying entirely on one side of the
+ * observation point z_i (always true here since z_i is itself a grid
+ * point), with d_near/d_far the distances from z_i to the nearer/farther
+ * endpoint of the segment, this returns the exact weights w_near,w_far
+ * such that
+ *     Int_{segment} E1(kappa|z'-z_i|) * [piecewise-linear S](z') dz'
+ *        = w_near*S(near endpoint) + w_far*S(far endpoint)
+ * -------------------------------------------------------------------- */
+static void seg_weights_E1(double kap, double d_near, double d_far, double h,
+                            double *w_near, double *w_far)
+{
+    double e2n, e3n, e2f, e3f;
+    expint23(kap * d_near, &e2n, &e3n);
+    expint23(kap * d_far, &e2f, &e3f);
+
+    double G0n = -e2n / kap,                    G0f = -e2f / kap;
+    double G1n = -(d_near / kap) * e2n - e3n / (kap * kap);
+    double G1f = -(d_far / kap) * e2f - e3f / (kap * kap);
+
+    double dG0 = G0f - G0n;
+    double dG1 = G1f - G1n;
+
+    *w_near = (d_far * dG0 - dG1) / h;
+    *w_far  = (dG1 - d_near * dG0) / h;
+}
+
+/* ================================ Planck function ======================== */
+
+static double Bnu(double nu, double T)
+{
+    if (nu <= 0.0 || T <= 0.0) return 0.0;
+    double x = nu / T;
+    if (x > 700.0) return 0.0;           /* underflow guard */
+    double d = expm1(x);
+    if (d <= 0.0) return 0.0;
+    return nu * nu * nu / d;
+}
+
+/* ================================ kappa(nu) table ========================= */
+
+typedef struct { double *nu, *kap; int n; } KappaTable;
+typedef struct { double nu, kap; } Pair;
+
+static int pair_cmp(const void *x, const void *y)
+{
+    double dx = ((const Pair *)x)->nu, dy = ((const Pair *)y)->nu;
+    return (dx > dy) - (dx < dy);
+}
+
+static KappaTable read_kappa_table(const char *fname)
+{
+    FILE *f = fopen(fname, "r");
+    if (!f) { fprintf(stderr, "Cannot open %s\n", fname); exit(1); }
+    double a, b;
+    int cap = 1024, n = 0;
+    Pair *p = malloc(cap * sizeof(Pair));
+    while (fscanf(f, "%lf %lf", &a, &b) == 2) {
+        if (n >= cap) { cap *= 2; p = realloc(p, cap * sizeof(Pair)); }
+        p[n].nu = 3.0/a; p[n].kap = b; n++;
+    }
+    fclose(f);
+
+    qsort(p, n, sizeof(Pair), pair_cmp);
+
+    KappaTable t;
+    t.nu = malloc(n * sizeof(double));
+    t.kap = malloc(n * sizeof(double));
+    for (int i = 0; i < n; i++) { t.nu[i] = p[i].nu; t.kap[i] = p[i].kap; }
+    t.n = n;
+    free(p);
+    return t;
+}
+
+/* linear interpolation, flat extrapolation outside the tabulated range */
+static double kappa_of_nu(const KappaTable *t, double nu)
+{
+    int n = t->n;
+    if (nu <= t->nu[0]) return t->kap[0];
+    if (nu >= t->nu[n - 1]) return t->kap[n - 1];
+    int lo = 0, hi = n - 1;
+    while (hi - lo > 1) {
+        int mid = (lo + hi) / 2;
+        if (t->nu[mid] <= nu) lo = mid; else hi = mid;
+    }
+    double f = (nu - t->nu[lo]) / (t->nu[hi] - t->nu[lo]);
+    return t->kap[lo] + f * (t->kap[hi] - t->kap[lo]);
+}
+
+/* ================================ trapezoid weights ======================== */
+static void trapz_weights(const double *x, int n, double *w)
+{
+    if (n == 1) { w[0] = 0.0; return; }
+    w[0] = 0.5 * (x[1] - x[0]);
+    w[n - 1] = 0.5 * (x[n - 1] - x[n - 2]);
+    for (int i = 1; i < n - 1; i++) w[i] = 0.5 * (x[i + 1] - x[i - 1]);
+}
+
+/* ================================ main ==================================== */
+
+int main(int argc, char **argv)
+{
+    const char *fname = (argc > 1) ? argv[1] : "/Users/olivierpironneau/Dropbox/afaire/files2/_kappa.txt";
+    KappaTable table = read_kappa_table(fname);
+    printf("Read %d (nu,kappa_nu) pairs from %s (nu range %.4g .. %.4g)\n",
+           table.n, fname, table.nu[0], table.nu[table.n - 1]);
+
+    /* ---------------- build frequency quadrature grid on (0,N) ------------ */
+    int Nnu = 0;
+    for (int i = 0; i < table.n; i++) if (table.nu[i] > 0.0 && table.nu[i] < NU_MAX) Nnu++;
+    Nnu += 2; /* endpoints nu=0 and nu=N */
+    double *nu_grid = malloc(Nnu * sizeof(double));
+    double *kappa_g = malloc(Nnu * sizeof(double));
+    {
+        int k = 0;
+        nu_grid[k] = 0.0; kappa_g[k] = kappa_of_nu(&table, 0.0); k++;
+        for (int i = 0; i < table.n; i++)
+            if (table.nu[i] > 0.0 && table.nu[i] < NU_MAX) { nu_grid[k] = table.nu[i]; kappa_g[k] = table.kap[i]; k++; }
+        nu_grid[k] = NU_MAX; kappa_g[k] = kappa_of_nu(&table, NU_MAX); k++;
+    }
+    double *w_nu = malloc(Nnu * sizeof(double));
+    trapz_weights(nu_grid, Nnu, w_nu);
+
+    double *sigma_a = malloc(Nnu * sizeof(double));
+    double *sigma_s = malloc(Nnu * sizeof(double));
+    for (int i = 0; i < Nnu; i++) { sigma_a[i] = 0.7 * kappa_g[i]; sigma_s[i] = 0.3 * kappa_g[i]; }
+
+    printf("Frequency grid: Nnu = %d points on (0,%.1f)\n", Nnu, NU_MAX);
+
+    /* ---------------- z grid (uniform) ------------------------------------ */
+    int Nz = NZ;
+    double *z = malloc(Nz * sizeof(double));
+    for (int i = 0; i < Nz; i++) z[i] = Z_DOM * (double)i / (double)(Nz - 1);
+    double *w_z = malloc(Nz * sizeof(double));
+    trapz_weights(z, Nz, w_z);
+    double h = z[1] - z[0];
+    printf("z grid: Nz = %d points on (0,%.3f), h = %.5f\n", Nz, Z_DOM, h);
+
+    /* ---------------- precompute per-frequency kernels --------------------- */
+    double *E2z    = malloc((size_t)Nnu * Nz * sizeof(double));
+    double *E3z    = malloc((size_t)Nnu * Nz * sizeof(double));
+    double *attenS = malloc((size_t)Nnu * Nz * sizeof(double));  /* exp(-kappa*(Z-z)/mu_s) */
+    double *attenSZ = malloc((size_t)Nnu * sizeof(double));      /* exp(-kappa*Z/mu_s)     */
+    double *E1mat  = malloc((size_t)Nnu * Nz * Nz * sizeof(double));
+    if (!E2z || !E3z || !attenS || !attenSZ || !E1mat) { fprintf(stderr, "out of memory\n"); exit(1); }
+
+    for (int inu = 0; inu < Nnu; inu++) {
+        double kap = kappa_g[inu];
+        attenSZ[inu] = exp(-kap * Z_DOM / MU_S);
+        for (int i = 0; i < Nz; i++) {
+            double x = kap * z[i];
+            double e1, e2, e3;
+            if (x <= 0.0) { e2 = 1.0; e3 = 0.5; }
+            else expint123(x, &e1, &e2, &e3);
+            E2z[(size_t)inu * Nz + i] = e2;
+            E3z[(size_t)inu * Nz + i] = e3;
+            attenS[(size_t)inu * Nz + i] = exp(-kap * (Z_DOM - z[i]) / MU_S);
+        }
+        /* Exact Int_0^Z E1(kap|z'-z_i|) * [piecewise-linear S](z') dz', built
+         * as a dense weight matrix E1mat[i][j] such that the integral equals
+         * sum_j E1mat[i][j]*S[j]  (no separate trapezoidal weight needed --
+         * the quadrature is already exact for piecewise-linear S, and the
+         * log singularity at z'=z_i is removed analytically). */
+        double *Wi = &E1mat[(size_t)inu * Nz * Nz];
+        memset(Wi, 0, (size_t)Nz * Nz * sizeof(double));
+        for (int i = 0; i < Nz; i++) {
+            double *row = &Wi[(size_t)i * Nz];
+            for (int kseg = 0; kseg < Nz - 1; kseg++) {
+                int near_idx, far_idx;
+                double d_near, d_far;
+                if (kseg < i) {
+                    near_idx = kseg + 1; far_idx = kseg;
+                    d_near = z[i] - z[kseg + 1]; d_far = z[i] - z[kseg];
+                } else {
+                    near_idx = kseg; far_idx = kseg + 1;
+                    d_near = z[kseg] - z[i]; d_far = z[kseg + 1] - z[i];
+                }
+                double wn, wf;
+                seg_weights_E1(kap, d_near, d_far, h, &wn, &wf);
+                row[near_idx] += wn;
+                row[far_idx]  += wf;
+            }
+        }
+    }
+    printf("Precomputation of E1/E2/E3 kernels done.\n\n");
+
+    /* ---------------- main arrays ------------------------------------------ */
+    double *J0    = calloc((size_t)Nnu * Nz, sizeof(double));   /* J0^m   */
+    double *J0new = malloc((size_t)Nnu * Nz * sizeof(double));  /* J0^{m+1} */
+    double *T     = malloc(Nz * sizeof(double));
+    double *R     = malloc(Nz * sizeof(double));                /* RHS of step 1 */
+    double *S     = malloc(Nz * sizeof(double));                /* source per freq, step 2/3 */
+
+    for (int i = 0; i < Nz; i++) T[i] = T_LO;
+
+    FILE *fc = fopen("convergence.csv", "w");
+    fprintf(fc, "iter,maxdT,maxdJ0_rel\n");
+
+    printf("%4s %14s %14s %10s\n", "iter", "max|dT|", "max|dJ0|(rel)", "T(0)*4798");
+    int m;
+    for (m = 0; m < MAXIT; m++) {
+
+        /* ---------------- Step 1: radiative-equilibrium T(z) --------------- */
+        for (int i = 0; i < Nz; i++) {
+            double sum = 0.0;
+            for (int inu = 0; inu < Nnu; inu++)
+                sum += w_nu[inu] * sigma_a[inu] * J0[(size_t)inu * Nz + i];
+            R[i] = sum;
+        }
+        double maxdT = 0.0;
+        double *Told = malloc(Nz * sizeof(double));
+        memcpy(Told, T, Nz * sizeof(double));
+        for (int i = 0; i < Nz; i++) {
+            double lo = T_LO, hi = T_HI;
+            for (int it = 0; it < BISECT_IT; it++) {
+                double mid = 0.5 * (lo + hi);
+                double sum = 0.0;
+                for (int inu = 0; inu < Nnu; inu++)
+                    sum += w_nu[inu] * sigma_a[inu] * Bnu(nu_grid[inu], mid);
+                if (sum < R[i]) lo = mid; else hi = mid;
+            }
+            T[i] = 0.5 * (lo + hi);
+            double dT = fabs(T[i] - Told[i]);
+            if (dT > maxdT) maxdT = dT;
+        }
+        free(Told);
+
+        /* ---------------- Steps 2-3: update J0 for every frequency --------- */
+        double maxdJ = 0.0, maxJ = 1e-300;
+        for (int inu = 0; inu < Nnu; inu++) {
+            double nu = nu_grid[inu];
+            double sa = sigma_a[inu], ss = sigma_s[inu];
+            double BTs = Bnu(nu, T_S), BTe = Bnu(nu, T_E);
+
+            for (int j = 0; j < Nz; j++)
+                S[j] = sa * Bnu(nu, T[j]) + ss * J0[(size_t)inu * Nz + j];
+
+            double c0 = -Q0 * MU_S * C_S * BTs * attenSZ[inu];
+            {
+                double acc = 0.0;
+                for (int j = 0; j < Nz; j++) acc += w_z[j] * E2z[(size_t)inu * Nz + j] * S[j];
+                c0 += -Q0 * acc;
+            }
+
+            for (int i = 0; i < Nz; i++) {
+                double acc = 0.0;
+                const double *E1row = &E1mat[((size_t)inu * Nz + i) * Nz];
+                /* E1mat already holds exact quadrature weights (see precompute
+                 * step) -- no separate trapezoidal w_z[] factor here. */
+                for (int j = 0; j < Nz; j++) acc += E1row[j] * S[j];
+
+                double val = 0.5 * CE_PRIME * BTe * E3z[(size_t)inu * Nz + i]
+                           + 0.5 * c0 * E2z[(size_t)inu * Nz + i]
+                           + 0.5 * C_S * BTs * ss * attenS[(size_t)inu * Nz + i]
+                           + 0.5 * acc;
+
+                J0new[(size_t)inu * Nz + i] = val;
+                double d = fabs(val - J0[(size_t)inu * Nz + i]);
+                if (val > maxJ) maxJ = val;
+                if (d > maxdJ) maxdJ = d;
+            }
+        }
+        memcpy(J0, J0new, (size_t)Nnu * Nz * sizeof(double));
+
+        double relJ = maxdJ / (maxJ > 0 ? maxJ : 1.0);
+        printf("%4d %14.6e %14.6e %10.5f\n", m, maxdT, relJ, T[0] * 4798.0);
+        fprintf(fc, "%d,%.8e,%.8e\n", m, maxdT, relJ);
+
+        if (relJ < TOL && maxdT < TOL) { printf("\nConverged after %d iterations.\n", m + 1); m++; break; }
+    }
+    fclose(fc);
+    if (m == MAXIT) printf("\nReached MAXIT=%d without full convergence (see tolerance trace above).\n", MAXIT);
+
+    /* ---------------- output: T(z) and frequency-integrated J profile ------ */
+    FILE *ft = fopen("T_profile.csv", "w");
+    fprintf(ft, "z,T_norm,T_kelvin\n");
+    for (int i = 0; i < Nz; i++) fprintf(ft, "%.6f,%.8f,%.4f\n", z[i], T[i], T[i] * 4798.0);
+    fclose(ft);
+
+    FILE *fj = fopen("J0_profile.csv", "w");
+    fprintf(fj, "z,J_integrated\n");
+    for (int i = 0; i < Nz; i++) {
+        double acc = 0.0;
+        for (int inu = 0; inu < Nnu; inu++) acc += w_nu[inu] * J0[(size_t)inu * Nz + i];
+        fprintf(fj, "%.6f,%.8e\n", z[i], acc);
+    }
+    fclose(fj);
+
+    printf("\nWrote T_profile.csv and J0_profile.csv\n");
+    printf("T_e = %.6f (norm) = %.3f K ;  T_s = %.6f (norm) = %.1f K\n",
+           T_E, T_E * 4798.0, T_S, T_S * 4798.0);
+    printf("Final T(z=0)   = %.6f (norm) = %.3f K\n", T[0], T[0] * 4798.0);
+    printf("Final T(z=Z)   = %.6f (norm) = %.3f K\n", T[Nz - 1], T[Nz - 1] * 4798.0);
+
+    return 0;
+}
