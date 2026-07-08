@@ -22,8 +22,8 @@ const double Te=(273+18)/T0, Ts=5798/T0;
 double kappanu=0.5,  q0=-0.3;
 const double mus=0.5;
 
-const int Nz=80; // nb points in z
-const int kmax=10;  // nb fixed point iterations
+const int Nz=60; // nb points in z
+const int kmax=14;  // nb fixed point iterations
 const double dz=Z/(Nz-1);
 double  J0[Nz], S[Nz], T[Nz];
 

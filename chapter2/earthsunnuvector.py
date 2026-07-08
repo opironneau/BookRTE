@@ -27,10 +27,11 @@ z2 = Z * 0.7 # Cloud top
 z3 = Z * 0.8 # Rayleigh scttering base
 nu1 = 0.5 # cloud is opaque between nu1 and nu2
 nu2 = 1.0
-lambda_val = 0.5  # Cloud opacity parameter
+lambda_val = 1.5  # Cloud opacity parameter 
+cscat=0.3 # Rayleigh and enhanced scattering in clouds
 
 # Grid parameters
-Nz = 40 # Number of discretization points in the vertical direction
+Nz = 60 # Number of discretization points in the vertical direction
 dz = Z / (Nz - 1)
 kmax = 8 # Number of ISIF iterations
 newton = 50 # Max number of Newton iterations
@@ -58,8 +59,8 @@ def sqr(x):
 
 # Scattering function
 def ascat(z,nu):  # background scattering + cloud scattering
-    aux= 0.3 + 0.3*(z2-z)*(z-z1)*(z>z1)*(z<z2)*4/sqr(z1-z2) \
-        + 0.3*(nu<nu2)*(nu>nu1)*sqr(4*(nu-nu1)*(nu-nu2)/sqr(nu2-nu1))*(z>z3)  #+ Rayleigh
+    aux= 0.3 + cscat*(z2-z)*(z-z1)*(z>z1)*(z<z2)*4/sqr(z1-z2) \
+        + cscat*(nu<nu2)*(nu>nu1)*sqr(4*(nu-nu1)*(nu-nu2)/sqr(nu2-nu1))*(z>z3)  #+ Rayleigh
     return aux
 
 # Cloud functions

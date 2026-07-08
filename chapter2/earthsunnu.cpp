@@ -26,12 +26,13 @@ const double q0=-0.3;
 const double mus=0.5;
 const double z1 = Z*0.5, z2=Z*0.7, z3=Z*0.8;  // altitudes for scattering
 const double nu1=0.5,nu2=1; // range of Rayleigh scattering
-double lambda=0.5; // for clouds
+double lambda=0.; // for clouds =1.5
+double cscat = 0.; // Rayleigh and enhanced scattering in clouds 
 
 const bool verbose=false;
-const int Nz=40; // nb points in tau
+const int Nz=60; // nb points in tau
 const double dz=Z/(Nz-1);
-const int kmax=8;  // nb fixed point iterations
+const int kmax=15;  // nb fixed point iterations
 const int jmaxmax=600; // max of max nb of points for integration in nu range
 const int newton = 50; // to compute the temperature from int k*Botlzmann=int k*Imean
 const double epsdycho=1e-4, epsnewton=1.e-10;  // precision for dychotomy & Newton
@@ -40,7 +41,7 @@ const double kappamin=0.001;  // if kappa read is too small max it with kappamin
 double  nu[jmaxmax],kappanu[jmaxmax];      // uneven discretization of [numin,numax]
 double  J0[jmaxmax][Nz], J0old[jmaxmax][Nz],T[Nz];// mean radiation and temperature
 
-string basedir("");// /Users/pironneau/Dropbox/aranger/TeX2026/BookVRTE/prog2/greenhouse4/");
+string basedir(""); // put your own directory if you wish 
 string mykappafile(basedir+"_kappa.txt");
 string myresulttemperature(basedir+"temperaturec");
 string myresultmeanintensity(basedir+"imean0");
@@ -49,8 +50,8 @@ int jmax;
 
 const double as(double z, double nu){// scattering
     return 0.3                                         // background scattering
-        + 0.3*(z2-z)*(z-z1)*(z>z1)*(z<z2)*4/sqr(z1-z2)// cloud scattering
-        + 0.3*(nu<nu2)*(nu>nu1)*sqr(4*(nu-nu1)*(nu-nu2)/sqr(nu2-nu1))*(z>z3);}  // Rayleigh
+       + cscat*(z2-z)*(z-z1)*(z>z1)*(z<z2)*4/sqr(z1-z2)// cloud scattering
+        + cscat*(nu<nu2)*(nu>nu1)*sqr(4*(nu-nu1)*(nu-nu2)/sqr(nu2-nu1))*(z>z3);}  // Rayleigh
 
  
 double cloud(double z){ return 1+lambda*((z>z1)-(z>z2));}
@@ -93,13 +94,13 @@ int readkappa(string mykappafile){
     if (!kappafile) {
         throw std::runtime_error("Cannot open file: " + mykappafile);
     }
-    int j=-1;
+    int j=0;
     double wavel, kappaux;
-    while(j<=jmaxmax-2 && (kappafile >> wavel >> kappaux)){
+    while(j<=jmaxmax && (kappafile >> wavel >> kappaux)){
         kappanu[j]  = fmax(kappaux,kappamin);
-        nu[j]=3/wavel;
+        nu[j++]=3/wavel;
      }
-    kappafile.close();//kappafileo.close();
+    kappafile.close();
     cout<<"Number of frequencies "<<j<<endl;
     double auxe=0, auxs=0;
     for(int k=1;k<j;k++){
@@ -248,8 +249,8 @@ int main(int argc, const char * argv[]) {
     //----------------------------------
     jmax=readkappa(mykappafile);
     
-//    { int K=2;
-    for(int K=0;K<2;K++){
+    { int K=2;
+//    for(int K=0;K<2;K++){
         for(int j=0;j<jmax;j++)
             if (K==1){
                 if((nu[j]>3./18)&&(nu[j]<3./14))
