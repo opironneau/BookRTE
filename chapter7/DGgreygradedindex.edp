@@ -14,7 +14,8 @@ border d(t=Z,0)  {x=-1; y=t;}
 border a2(t=-1,0){x=t;y=0;}
 int n=3;
 mesh Th=buildmesh(a1(10*n)+b(10*n)+c1(10*n)+c2(10*n)+d(10*n)+a2(10*n));
-fespace Vh(Th,P1dc);
+// fespace Vh(Th,P1dc); // change space to use standard FEM
+fespace Vh(Th,P1);
 
 real kappanu=0.5;
 real a=0.4; // Diffraction index param. nn is n^2
@@ -43,15 +44,14 @@ for(int i=0; i<12;i++){
 	
 	real al=1; // recommanded penalty coefficient
 	solve BBI(I,Ih) = int2d(Th)(( kappa*I +  bx(x)*dx(I) + by(x)*dy(I) )*Ih)
-	//				+ intalledges(Th)((1-nTonEdge)*Ih*(al*abs(N.x*dlogn * (1-x*x) + N.y*x)-(N.x*dlogn * (1-x*x) + N.y*x)/2)*jump(I))
-					- intalledges(Th)(al*(1-nTonEdge)*Ih*(min(0.,N.x*bx(x) + N.y*by(x)))*jump(I))
+					- intalledges(Th)(al*(1-nTonEdge)*Ih*(min(0.,N.x*bx(x) + N.y*by(x)))*jump(I)) // comment for standard FEM
 					- int2d(Th)(  (kappa*BB(T)  + bk2*PP(x)*(QP(y) +PP(xs)*Is*exp(-kaint(y,Z)/xs))) *Ih)
 	 				- int1d(Th,a1,c2)(min(0.,N.x*bx(x)+N.y*by(x))*I*Ih) 
 					+ int1d(Th,a1)(min(0.,N.x*bx(x)+N.y*by(x))*(x*I0 + q0*JmT)*Ih) 
 ;
 
 	solve BBQ(Q,Qh) = int2d(Th)((x*dy(Q) + kappa*Q +  dlogn * (1-x*x)*dx(Q) )*Qh)
-					- intalledges(Th)(al*(1-nTonEdge)*Qh*(min(0.,N.x*bx(x) + N.y*by(x)))*jump(Q))
+					- intalledges(Th)(al*(1-nTonEdge)*Qh*(min(0.,N.x*bx(x) + N.y*by(x)))*jump(Q)) // comment for standard FEM
 					- int1d(Th,a1,c2)(min(0.,N.x*bx(x)+N.y*by(x))*Q*Qh) 
 					+ int2d(Th) (bk2*(1-PP(x))*QP(y)*Qh )
 ;
@@ -72,7 +72,7 @@ plot(I, dim=3, fill=true, value=true, cmm="I");
 plot(Q, dim=3, fill=true, value=true, cmm="Q");
 plot(T, dim=3, fill=true, value=true, cmm="T");
 cout<<endl;
-ofstream Iout("Iout4.txt");
+ofstream Iout("Iout5.txt");
 for(int i=0;i<60;i++){
     real z=Z*i/60.;
     Iout<<z<<" "<<T(0.1,z)<<" "<<I(0.1,z)<<" "<<Q(0.1,z)<<endl;

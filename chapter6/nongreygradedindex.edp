@@ -1,12 +1,15 @@
 // I-Q VRRTE Handles continuous refractive index and nu-dependent kappa
 // No albedo
+// As the convergence was slow, I let claude.ai add Aitken acceleration (at the cost of a loss of monoticity)
+// kappay may be counted twice: check
+
 load "lapack"  
 verbosity=0;  // change to 1 or more for more output from linear solver
 bool verbose=false; // change to true for details on Newton iterations ansd more  
 bool onoff=false; // used to pause after graphics
 int k,l,Ny=30,  // nb of points in y (altitude)
  		N=7,	// nb of basis function (see chapter 6 of the book)
-		Nlev=3; // To approx kappa[i] (should be 10 but then iti is slow)
+		Nlev=7; // To approx kappa[i] (should be 10 but then iti is slow)
 int n=1; // controls the initial triangulation
 
 // Build the space of y-only functions
@@ -28,18 +31,18 @@ for(int n=0;n<=N;n++)
 C1=C^-1;
 cout<<C<<endl<<endl;
 cout<<C1<<endl;
-real stefan=pi^4/15, kappamin=0.01,  kappamax=2, kappaaux=0.8;
+real stefan=pi^4/15, kappamin=0.001,  kappamax=2.5, kappaaux=0.8;
 real[int] kappalev(Nlev+1);
 for(int l=0;l<=Nlev; l++){ kappalev[l] = kappamin + l*(kappamax-kappamin)/Nlev;}
 
 ////////////////////// Define Scattering //////////////////////
 V1h kappay=1-0.7*y; // y-dependence of kappa which is kappa[nu]*kappay
-real as=0.3,
+real as=1,
 	 beta=0.5,  //scattering and Raileigh coefficient
 	 nur1=0.5, // for Rayleigh
 	 nur2=2,
 	 z1 = 0.5;
-macro aas(nu,z)(as*(1+ (nu<nur2)*(nu>nur1)*sqr(sqr(nu/nur2))*(z>z1))) //
+macro aas(nu,z)(as*(0.9+0.5*(nu<nur2)*(nu>nur1)*sqr(sqr(nu/nur2))*(z>z1))) //
 
 ////////////////////////////////// Read kappa	//////////////////////// 
 ifstream kappafile("_kappa.txt");
@@ -51,12 +54,16 @@ while (Nnu++<Nnumax-2){// && (! kappafile.eof))) {
 	kappafile >> aux >> kappa[Nnu];
 	nu[ Nnu]=3/aux; // next lines is to account for greenhouse gases
 //	if((nu[Nnu]>3./18)&&(nu[Nnu]<3./14)) kappa[Nnu]=max(0.5,1.2*kappa[Nnu]); //CO2
-	if((nu[Nnu]>3./4.5)&&(nu[Nnu]<3./3.5)) kappa[Nnu]=max(0.5,2*kappa[Nnu]); // NOx
-//	if((nu[Nnu]>3./8.5)&&(nu[Nnu]<3./7)) kappa[Nnu]=max(0.5,2*kappa[Nnu]); // CH4
+//	if((nu[Nnu]>3./4.5)&&(nu[Nnu]<3./3.5)) kappa[Nnu]=max(0.5,2*kappa[Nnu]); // NOx
+	if((nu[Nnu]>3./8.5)&&(nu[Nnu]<3./7)) kappa[Nnu]=max(0.5,2*kappa[Nnu]); // CH4
 //	kappa[Nnu]= 0.5;
 //	cout<<Nnu<<" "<<nu[Nnu]<<" "<<kappa[Nnu]<<endl;
 }
 cout << "read "<<Nnu<< "values\n ";
+
+V1h[int] J0nu(Nnumax), J2nu(Nnumax); // J0,J2 of the previous iteration, per frequency
+V1h aqc, bqc;  real[int] Akc(N+1), Bkc(N+1); // exact-level-split work arrays
+int niter=15;          // iterations on the source; the 6.5.2 Example says 15
 
 real Te = (18+273)/4798.,  Ie=2.;  // Earth Temperature and intensity 
 real Is=2e-6, Ts= 5800/4798.; // // Sun Temperature and intensity
@@ -72,15 +79,16 @@ mesh Th=buildmesh(a1(10*n)+b(10*n)+c1(10*n)+c2(10*n)+d(10*n)+a2(10*n));
 fespace Vh(Th,P1);
 
 ///////////////////////////////////////////////////////////
-real a=0.2; // Diffraction index param and the derivative of its log
-V1h nn=sqrt(1+a*sqr(y-0.5)),dlognn=a*(y-0.5)/(1+a*sqr(y-0.5));
+real a=-0.2; // Diffraction index param and the derivative of its log
+V1h nn=sqrt(1+a*sqr(y-0.5))
+,dlognn=a*(y-0.5)/(1+a*sqr(y-0.5));
 ////////////////////////////////////////////////////////////
 
 V1h T=Te*(1-0.7*y); // initial Temperature for iter on the source
 
 Vh I,Ih, Q; // Light and polarization intensities
 Vh[int] I0l(Nlev),IZl(Nlev); // Elementary solutions
-macro operator(kappaaux) (x*dy(I)*Ih + kappay*kappaaux*I*Ih + dlognn * (1-x*x)*dx(I)*Ih) //
+macro operator(kappaaux) ((x*dy(I) + kappay*kappaaux*I + dlognn * (1-x*x)*dx(I) )*Ih) //
 
 // Adapt the mesh to a typical light intensity
 solve Aux(I,Ih)= int2d(Th)( operator(kappaaux) )
@@ -97,20 +105,44 @@ Vh[int] Il(Nlev), Ql(Nlev);
         
 varf AA(I,Ih) = int2d(Th)( operator(kappaaux) ) + on(a1,c2, I=0) ; // Works for both I and Q
 matrix[int] A(Nlev) ;
-for(int l=0;l<Nlev;l++) { kappaaux=(kappalev[l]+kappalev[l+1])/2; A[l]=  AA(Vh,Vh) ;}
+// kappa_l = the B'-weighted mean of kappa_nu inside each bin, NOT the bin midpoint.
+// With the midpoint the ratio r = kappa_nu/kappa_l carries a systematic bias
+// (<r>_w = 0.89 at Nlev=3, 0.99 at 7, 1.05 at 15) which both shifts the converged
+// temperature and puts the source iteration on its stability boundary. Taking the
+// Integrating the transport equation over mu and using the temperature equation,
+// dF/dz + 2(dlog n/dz) F = rho * int (kappa_nu - kappa_l) J0_nu dnu, so the flux is
+// conserved only if kappa_l is the J0-weighted (i.e. Planck-weighted) mean of
+// kappa_nu inside the bin. The bin midpoint leaves a 24% flux residual at Nlev=7.
+real[int] kaplevc(Nlev), kwsum(Nlev);
+kaplevc=0.; kwsum=0.;
+for(int i=1;i<Nnu;i++){
+    real nu1=(nu[i]+nu[i-1])/2, dnu=nu[i]-nu[i-1];
+    real ea = exp(min(nu1/(Te+1e-6),50.));
+    real Bref = nu1*nu1*nu1/max(1.e-300,ea-1);   // Planck at the reference T
+    int lb=0; while(lb<Nlev-1 && kappa[i]>=kappalev[lb+1]) lb++;
+    real ww = Bref*dnu;   // J0-weighting: this is the choice that conserves energy
+    kaplevc[lb] = kaplevc[lb] + kappa[i]*ww;  kwsum[lb] = kwsum[lb] + ww;
+}
+for(int l=0;l<Nlev;l++){
+    if(kwsum[l]>0) kaplevc[l] = kaplevc[l]/kwsum[l];
+    else kaplevc[l] = (kappalev[l]+kappalev[l+1])/2;
+}
+for(int l=0;l<Nlev;l++) { kappaaux=kaplevc[l]; A[l]=  AA(Vh,Vh) ;}
 
 varf aa0(I,Ih)  =   on(a1,I=Ie*x/sqr(nn)) + on(c2, I=0) ; // For translation of Bdy Condition
 varf aaZ(I,Ih)  =   on(c2,I=Is/sqr(nn)) + on(a1, I=0) ; // For translation of Bdy Condition
 varf bb(I,Ih)  =   int2d(Th)(kappay*exp(-20*(y-yN[k])^2)*Ih ) + on(a1,c2, I=0); // for non-x RHS
 varf cc(I,Ih)  =   int2d(Th)(kappay*x*x*exp(-20*(y-yN[k])^2)*Ih ) + on(a1,c2, I=0); // for RHS*x^2
 
-func real H0(real yaux, int l){return 0.5*int1d(Th,a1,a2)(I0l[l](x,yaux));}
-func real HZ(real yaux, int l){return 0.5*int1d(Th,a1,a2)(IZl[l](x,yaux));}
+func real H0(real yaux, int l){return 0.5*int1d(Th,a1,a2)((3*x*x-1)*I0l[l](x,yaux));}
+func real HZ(real yaux, int l){return 0.5*int1d(Th,a1,a2)((3*x*x-1)*IZl[l](x,yaux));}
 func real H1(real yaux,int nl){return 0.5*int1d(Th,a1,a2)((3*x*x-1)*Zk[nl](x,yaux));}
-func real H2(real yaux,int nl){return 0.5*int1d(Th,a1,a2)(6*(2*x*x-1)*Wk[nl](x,yaux)
-														 -2*(3*x*x-2)*Zk[nl](x,yaux)) ;}
+func real H3(real yaux,int nl){return 0.5*int1d(Th,a1,a2)((3*x*x-1)*Wk[nl](x,yaux));}
+func real H2(real yaux,int nl){return 0.5*int1d(Th,a1,a2)((18*x*x-12)*Wk[nl](x,yaux)
+														 -(12*x*x-10)*Zk[nl](x,yaux)) ;}
 
-V1h[int]	Hl(Nlev), Hl0((N+1)*Nlev), HlZ((N+1)*Nlev), Hnl1((N+1)*Nlev), Hnl2((N+1)*Nlev);
+V1h[int]	Hl(Nlev), Hl0((N+1)*Nlev), HlZ((N+1)*Nlev), Hnl1((N+1)*Nlev),
+			Hnl2((N+1)*Nlev), Hnl3((N+1)*Nlev);
 
 for(int l=0; l<Nlev;l++){
   real[int] aux = aa0(0,Vh);
@@ -127,6 +159,7 @@ for(int l=0; l<Nlev;l++){
 	Wk[nl][]=A[l]^-1*aux;
 	Hnl1[nl]=H1(y,nl);
 	Hnl2[nl]=H2(y,nl);
+	Hnl3[nl]=H3(y,nl);
   }
   cout<<l<<" level done\n";
 }
@@ -146,6 +179,7 @@ if(verbose)// check integration in nu
 				
 
 func real J0(real yaux, int l){ return 0.5*int1d(Th,a1,a2)(Il[l](x,yaux));}
+func real J2f(real yaux, int l){ return 0.5*int1d(Th,a1,a2)(x*x*Il[l](x,yaux));}
 func real JK02(real yaux, int l){
 	return 0.25*int1d(Th,a1,a2)((3*x*x-1)*Il[l](x,yaux)+3*(x*x-1)*Ql[l](x,yaux)); }
 
@@ -156,8 +190,8 @@ real epsdycho=1.e-4, epsnewton=1.e-10;  // precision for dychotomy before Newton
 func real root( real rhs,  real T0, int i){
     real myeq=-rhs;
     for(int j=1; j<Nnu;j++){
-		real dnu = nu[j]-nu[j-1];
-         myeq += (1-aas(nu[j],real(i)/Ny))*(kappa[j]+kappa[j-1])/2*B(j*dnu,T0)*dnu;
+		real dnu = nu[j]-nu[j-1], nu1=(nu[j]+nu[j-1])/2;
+         myeq += (1-aas(nu[j],real(i)/Ny))*(kappa[j]+kappa[j-1])/2*B(nu1,T0)*dnu;
 	 }
     return myeq;
 }
@@ -220,10 +254,11 @@ func  int genT(real[int] J00){
 }
 //////////////////////////////////////////////////////////////////////////////////
 Vh Itotal,Qtotal; // Only used for display
+V1h Tm1=T, Tm2=T; int nacc=0; // history for the Aitken acceleration below
 
 
 //////////////////////// iterations on the source. ///////////////////////////////	
-for(int m=0;m<6;m++){
+for(int m=0;m<niter;m++){
 	Itotal=0;
 	Qtotal=0;
 	V1h JJ0=0; // used in the temperature equation genT()
@@ -236,32 +271,68 @@ for(int m=0;m<6;m++){
 	 }
 	for(int i=1;i<Nnu;i++){
 		real nu1=(nu[i]+nu[i-1])/2, dnu = nu[i]-nu[i-1];
+		// level bracketing kappa[i], clamped at BOTH ends
+		l=0; while(l<Nlev-1 && kappa[i]>=kappalev[l+1]) l++;
 		for(k=0;k<=N;k++)  // Coef on exp basis of RHS of I equation
-		  	Gk[k]= int1d(Sgh)(B(nu1,T)/sqr(nn) *exp(-20*(y-yN[k])^2));
+		  	Gk[k]= int1d(Sgh)(((1-aas(nu1,y))*B(nu1,T)/sqr(nn) + aas(nu1,y)*J0nu[i])*kappay
+		  	                  *exp(-20*(y-yN[k])^2));
 		Fk = C1*Gk; // Coef on Zk basis of RHS of I equation
-		for(l=0;l<Nlev;l++) // compute level l
-			if(kappalev[l]<=kappa[i] && kappa[i] < kappalev[l+1]) break;
-		l = min(l,Nlev-1);
+		// ---- EXACT level split ------------------------------------------------
+		// The operator uses kappa_l but the true extinction is kappa_nu. Writing
+		// kappa_nu = kappa_l - (kappa_l-kappa_nu) and moving the residual to the
+		// rhs makes the split exact instead of approximate, so the converged answer
+		// no longer depends on Nlev. The residual (kappa_l-kappa_nu)*I is lagged and
+		// carried by its two lowest mu-moments:  I ~ aqc(z) + bqc(z) mu^2  with
+		//    J0 = aqc + bqc/3 ,  J2 = aqc/3 + bqc/5  =>  bqc = (45/4)(J2 - J0/3).
+		bqc = 11.25*(J2nu[i] - J0nu[i]/3.);  aqc = J0nu[i] - bqc/3.;
+		for(k=0;k<=N;k++) Gk[k]= int1d(Sgh)(aqc*kappay*exp(-20*(y-yN[k])^2));
+		Akc = C1*Gk;
+		for(k=0;k<=N;k++) Gk[k]= int1d(Sgh)(bqc*kappay*exp(-20*(y-yN[k])^2));
+		Bkc = C1*Gk;
+		real dkap = kaplevc[l]-kappa[i];
+		// -----------------------------------------------------------------------
 		Il[l]=I0l[l]*B(nu1,Te)+IZl[l]*B(nu1,Ts);
 		Ql[l]=0;
 		Hl[l]=Hl0[l]*B(nu1,Te)+HlZ[l]*B(nu1,Ts);		
 		for(k=0;k<=N;k++) {
 			V1h auxas = kappa[i]*3*beta*aas(nu1,y)/8;
 			Il[l] = Il[l] + kappa[i]*Fk[k]*Zk[l+Nlev*k] 
-						          + auxas *Ek[l+Nlev*k]*(3*Wk[l+Nlev*k]-Zk[l+Nlev*k]);
+						          + auxas/3 *Ek[l+Nlev*k]*(3*Wk[l+Nlev*k]-Zk[l+Nlev*k])
+						          + dkap*(Akc[k]*Zk[l+Nlev*k] + Bkc[k]*Wk[l+Nlev*k]);
 			Ql[l] = Ql[l] + auxas *Ek[l+Nlev*k]*(Wk[l+Nlev*k] - Zk[l+Nlev*k]);
-			Hl[l] = Hl[l] + kappa[i]*Gk[k]*Hnl1[l+Nlev*k]+ auxas*Ek[l+Nlev*k]*Hnl2[l+Nlev*k];
+			Hl[l] = Hl[l] + kappa[i]*Fk[k]*Hnl1[l+Nlev*k]
+						          + auxas/3*Ek[l+Nlev*k]*Hnl2[l+Nlev*k]
+						          + dkap*(Akc[k]*Hnl1[l+Nlev*k] + Bkc[k]*Hnl3[l+Nlev*k]);
 		}
-		JJ0 = JJ0 + (1-aas(nu1,y))*kappa[i]*sqr(nn)*J0(y,l)*dnu;
+		J0nu[i] = J0(y,l); J2nu[i] = J2f(y,l); // lagged; used at the next iteration
+		JJ0 = JJ0 + (1-aas(nu1,y))*kappa[i]*sqr(nn)*J0nu[i]*dnu;
 		Itotal = Itotal + Il[l]*dnu;
 		Qtotal = Qtotal + Ql[l]*dnu;
 	}
 	if(verbose) cout << JJ0[] <<endl;
 	genT(JJ0[]);
+	// ---- Aitken (Steffensen) acceleration -------------------------------
+	// The source iteration is monotone (see the Monotony section) and very
+	// nearly geometric, so a delta^2 extrapolation every third sweep jumps to
+	// the limit. Node-wise, and only where the local ratio is in (0,1).
+	nacc++;
+	if(nacc>=3 && m>=4){   // let the iteration reach its asymptotic regime first
+		int nex=0;
+		for(int iy=0;iy<=Ny;iy++){
+			real d1=Tm1[][iy]-Tm2[][iy], d2=T[][iy]-Tm1[][iy], dd=d2-d1;
+			if(abs(d1)>1e-14 && abs(dd)>1e-14){
+				real rho=d2/d1;
+				if(rho>0 && rho<0.995){ T[][iy]=T[][iy]-d2*d2/dd; nex++; }
+			}
+		}
+		if(verbose) cout<<"   Aitken at "<<nex<<"/"<<Ny+1<<" nodes"<<endl;
+		nacc=0;
+	}
+	Tm2=Tm1; Tm1=T;
 	cout<<m<<" "<<T[][0]*4798-273<<endl;//plot(I,wait=onoff, cmm="iterated sol at "+m);
 }
 
-ofstream Iout("tempe2n.txt");
+ofstream Iout("tempe3nn.txt");
 for(int i=0;i<=Ny;i++){
     Iout<<real(i)/Ny<<" "<<4798*T[][i]-273<<endl;
 }

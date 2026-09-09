@@ -24,11 +24,13 @@ All programs in this folder are FreeFem++ scripts.
 
 The grey case without discontinuity are treated by 
 
-- greygradedindex.edp, where $\kappa_\nu$ is constant.
-  
-- GreyPolarizedSmooRefracttiveSUPG.md is the same but it has embedded math comments for clarity.
-  
-- nongreygeneral.edp  solve the case of a $\nu$ depended $\kappa_\nu$.
-  
+- greygradedindex.edp.
 - VRTEFresnel allows for a discontinuity at $z=Y$.
 
+The general case without discontinuity if  $a_\nu$ and/or $\kappa_\nu$ depend on $\nu$.
+    
+- nongreygradedindex.edp  
+  
+An alternative solution of the PDE programmed by claude AI in python,
+
+- refractive_upwind.py

@@ -1,7 +1,5 @@
 # Tips to run the programs on a Windows PC
 
-All programs can be run from a terminal by calling the compiler followed by the name of the program.  But to modify and understand the program one is strongly encourage to use an integrated development environment (IDE).
-
 ## C++ Programs
 
 - Install MSYS2 from https//www.MSYS2.org. You need to type in the terminal of MSYS2  
@@ -32,8 +30,6 @@ To compile do
 gfortran myfile.f90 -o myprogram
 
 If it doesn't work look into  C:\mysys64\ for another terminal (shell) of MSYS2 called MSYS2 MINGW64 SHELL  with a blue icon.
-
-There is an IDE which works with fortran, Code::Block.
 
 ## FreeFem++
 

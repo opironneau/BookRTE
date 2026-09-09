@@ -42,7 +42,7 @@ gfortran myfile.f90 -o myprogram
   
   https://freefem.org/
   
-  See the section Assets. If you use an Arm64 PC you need to comile freefem.
+  See the section Assets and download the version compatible with your processor.
   
 - To run a freefem script, easiest is to use VS Code (see above). Install the "freefem" module (from the extension install icon on the left panel). If your program file ends with .edp or .md you should see a colored syntax and a button to execute the file. If it ends with .md you can also active the right panel and see the math which explains the program .  If you don't like VS Code you can also run it via the Terminal  by typing 
   

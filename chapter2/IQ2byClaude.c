@@ -48,7 +48,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-
+#include <time.h>
 /* ---------------------------- problem parameters ------------------------ */
 #define Z_DOM      1.2
 #define NU_MAX     250.0
@@ -329,8 +329,8 @@ int main(int argc, char **argv)
     double *J0new = malloc((size_t)Nnu * Nz * sizeof(double));  /* J0^{m+1} */
     double *T     = malloc(Nz * sizeof(double));
     double *R     = malloc(Nz * sizeof(double));                /* RHS of step 1 */
-    double *S     = malloc(Nz * sizeof(double));                /* source per freq, step 2/3 */
-
+    double *S     = malloc(Nz * sizeof(double));           /* source per freq, step 2/3 */
+    double Time0 = clock();
     for (int i = 0; i < Nz; i++) T[i] = T_LO;
 
     FILE *fc = fopen("convergence.csv", "w");
@@ -410,7 +410,7 @@ int main(int argc, char **argv)
     }
     fclose(fc);
     if (m == MAXIT) printf("\nReached MAXIT=%d without full convergence (see tolerance trace above).\n", MAXIT);
-
+    printf( " Time CPU = %10.6f\n", (clock() - Time0)/CLOCKS_PER_SEC);
     /* ---------------- output: T(z) and frequency-integrated J profile ------ */
     FILE *ft = fopen("T_profile.csv", "w");
     fprintf(ft, "z,T_norm,T_kelvin\n");

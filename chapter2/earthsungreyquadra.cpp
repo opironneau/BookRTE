@@ -1,6 +1,8 @@
-//  /BookVRTE/prog/earth/earthNoT/earth1.cpp
 //
 //  Created by Olivier Pironneau on 08/06/2025.
+//
+// compile with g++ earthsungreyquadra.cpp
+// run by ./a.out
 //
 
 #include <iostream>
@@ -26,7 +28,7 @@ const int kmax=15;  // nb fixed point iterations
 const double dz=Z/(Nz-1);
 double J00Z[Nz], J0[Nz], S[Nz], T[Nz];
 
-double expint_E1(const double t){ // will not work if if t>2.5
+double expint_E1(const double t){ // will not work if if t>14
      double abst=fabs(t)+1e-15;
     const int Kexpint = 10; // precision in exponential integral function E1
     const double  gaNtaua =0.577215664901533; // special integration for log(t)
@@ -45,7 +47,7 @@ double expint_E3(const double t){
     double t1=fabs(t);
     return (exp(-t1) - t1*expint_E2(t1))/2;
 }
-double expint_E1b(const double t){ // will not work if if t>2.5
+double expint_E1b(const double t){ // will not work if if t>14
      double abst=fabs(t)+1e-15;
     const int Kexpint = 10; // precision in exponential integral function E1
     const double  gaNtaua =0.577215664901533; // special integration for log(t)

@@ -217,8 +217,8 @@ function solveIQ()
                 sigs = kappazj * asz;
                 siga = kappazj * (1 - asz);
                 
-                S(i) = sigs * J0old(jnu, i) + siga * BB(nuj, T(i));
                 H(i) = 9*beta_val*sigs/8 * (J2old(jnu, i) - J0old(jnu, i)/3 - K0old(jnu, i) + K2old(jnu, i));
+                S(i) = sigs * J0old(jnu, i) + siga * BB(nuj, T(i)) - H(i)/3;
                 c0 = c0 - q0 * expint_E2(kappasum(jnu, i)*kappanuj) * S(i) * dz;
             end
             
@@ -234,7 +234,7 @@ function solveIQ()
                 
                 for j_idx = 2:Nz
                     Hj = (H(j_idx) + H(j_idx-1))/2;
-                    Sj = (S(j_idx) + S(j_idx-1))/2 - Hj/3;
+                    Sj = (S(j_idx) + S(j_idx-1))/2 ;
                     aux = kappanuj * (kappasum(jnu, i) - (kappasum(jnu, j_idx) + kappasum(jnu, j_idx-1))/2);
                     
                     expE1ij = expint_E1(aux);

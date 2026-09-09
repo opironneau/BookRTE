@@ -36,3 +36,4 @@ $$
 I(x,\mu)= -\int_x^1 \frac1\mu e^{\frac {|x-x'|}\mu}J_0(x')d x'.
 $$
 
+For comparison a Monte Carlo method has been programmed by Anthropic/Claude.AI.  

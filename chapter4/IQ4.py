@@ -162,8 +162,8 @@ def updateJK_step(kappanu, nu, kappaz, kappasum, J0old, J2old, K0old, K2old, T):
     siga    = kappazj * (1.0 - asz)
 
     BB_vals = BB(nu[:, None], T[None, :])                        # (jmax, Nz)
-    S = sigs * J0old + siga * BB_vals                           # (jmax, Nz)
     H = 9.0 * beta * sigs / 8.0 * (J2old - J0old / 3.0 - K0old + K2old)
+    S = sigs * J0old + siga * BB_vals  - H/3.0                   # (jmax, Nz)
 
     # --- c0: (jmax,) ---
     ks_top = kappanu * kappasum[:, Nz - 1]                      # (jmax,)
@@ -187,7 +187,7 @@ def updateJK_step(kappanu, nu, kappaz, kappasum, J0old, J2old, K0old, K2old, T):
     # C++ loop: for j=1..Nz-1, ip=max(i,j), jp=min(i,j)
     # arg = kappanu*(kappasum[ip]-kappasum[jp]-dz/2)
     Hj  = (H[:, 1:] + H[:, :-1]) / 2.0                          # (jmax, Nz-1)
-    Sj  = (S[:, 1:] + S[:, :-1]) / 2.0 - Hj / 3.0               # (jmax, Nz-1)
+    Sj  = (S[:, 1:] + S[:, :-1]) / 2.0                          # (jmax, Nz-1)
 
     i_idx = jnp.arange(Nz)        # (Nz,)    observation points i=0..Nz-1
     j_idx = jnp.arange(1, Nz)     # (Nz-1,)  interval indices  j=1..Nz-1

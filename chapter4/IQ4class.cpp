@@ -5,7 +5,7 @@
 //  A factor of 2 in speed is lost because of the arrays are X<vector<vector<double>> 
 //  instead of X[][] see the IQ4classCursor.cpp for a solution
 
-// compile with g++ -O3 -std=c++17 -DIQ4_HAVE_GSL=0 -o IQ4class IQ4classGemini.cpp 
+// compile with g++ -O3 -std=c++17 -DIQ4_HAVE_GSL=0 -o IQ4 IQ4class.cpp
 
 
 #include <vector>
@@ -17,6 +17,7 @@
 #include <stdexcept>
 #include <array>
 #include "IQ4class.hpp"
+#include "gplot++.h"
 //const double pi = std::atan(1.)*4, stefan=pi*pi*pi*pi/15;
 
 namespace physics{
@@ -27,7 +28,7 @@ namespace physics{
     const double Te=(273+18)/T0, Ts=5798/T0;// Earth and Sun temperature in °K
     const double q0=-0.3; // albedo intensity
     const double mus=0.5; // minus direction of collimated light
-    const double beta=0.5;  // % of isotropic to Rayleigh scattering
+    const double _beta=0.5;  // % of isotropic to Rayleigh scattering
     const double nuRayleighm=0.5,nuRayleighM=1; // frequency range of Rayleigh scattering
     const double nuWaterS = 3./20, nuWaterm = 3./10, nuWaterM = 3./1; // frequency range of water vapor absorption
     const double cloud = 1.5; // strength of cloud in (zcloudm,zcloudM)
@@ -37,7 +38,7 @@ namespace physics{
 
 namespace algo{
     const double Tstart = physics::Te/2; // initial T for ISIF
-    const std::string basedir("/Users/pironneau/Dropbox/aranger/TeX2026/BookVrte/prog4/IQ4chap4/IQ4chap4/");
+    const std::string basedir("");
     const std::string kappafile(basedir+"_kappa.txt"); // contains nu and kappa
      const int Nz=80;  // size of altitude grid
     const int kmax=9;  // nb of ISIF iterations
@@ -205,7 +206,7 @@ public:
     void updateJK()//(const std::vector<double>& T)
     {
          const double mus=physics::mus,
-                     beta = physics::beta,
+                     _beta = physics::_beta,
                      Cs = physics::Cs,
                      Ce = physics::Ce,
                      Ts = physics::Ts,
@@ -232,13 +233,14 @@ public:
                      double sigs   = kappaz * asz;
                      double siga   = kappaz * (1.0 - asz);
 
-                     S[i] = sigs * J0[jnu][i] + siga * BB(nuj, T[i]);
-                     H[i] = 9.0 * beta * sigs / 8.0
+                     H[i] = 9.0 * _beta * sigs / 8.0
                           * (J2[jnu][i] - J0[jnu][i]/3.0
                              - K0[jnu][i] + K2[jnu][i]);
+                     S[i] = sigs * J0[jnu][i] + siga * BB(nuj, T[i]) - H[i]/3.;
+
 
                      c0 -= q0 * ExpIntegral::E2(opacity_.kappasum(jnu, i) * kappanuj)
-                              * J0[jnu][i] * dz;
+                              * S[i] * dz;
                  }
 
                  // Main altitude loop
@@ -414,6 +416,13 @@ int main(){
              <<"\t"<<problem.T[i]*physics::T0-273
              <<"\t\t"<<meanJ0<<endl;
     }
-    return 0;
+    std::vector<double> disp(zgrid.Nz), tau(zgrid.Nz);
+    for(int i=0;i<zgrid.Nz;i++) { disp[i]=problem.T[i]*physics::T0-273; tau[i] = zgrid.backtoz(i*zgrid.dz);}
+    Gnuplot gnuplot{};
+    gnuplot.set_ylabel("T");
+    gnuplot.set_xlabel("Altitude");
+    gnuplot.plot(tau,disp,"T");
+    gnuplot.show();
+return 0;
 }
 

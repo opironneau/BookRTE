@@ -1,0 +1,4 @@
+mesh Th = square(10,10);
+fespace Vh(Th,P1);
+Vh u=x*y;
+plot(u,value=1, bb=[[0,2],[0,1]], ps="scale.ps");

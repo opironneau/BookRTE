@@ -35,17 +35,15 @@ $$
 Denote
 
 $$
-	J_2(z) = \tfrac12\int_{-1}^1 \mu^2I d\mu
+	J_q(z) = \tfrac12\int_{-1}^1 \mu^qI d\mu
 \quad
-	K_0(z) = \tfrac12\int_{-1}^1 Q d\mu, 
-\quad
-	K_2(z) = \tfrac12\int_{-1}^1 \mu^2Q d\mu .
+	K_q(z) = \tfrac12\int_{-1}^1 \mu^qQ d\mu .
 $$
 
 Then, 
 
 $$
-J_q(z) = \tfrac{1}2\int_{-1}^1\mu^q I(z,\mu) d\mu = R_q +\tfrac{1}2\int_0^Z \left( E_{q+1}(\kappa_\nu|z-z'|)S_0(z')+ E_{q+3}(\kappa_\nu|z-z'|)S_2(z')\right) dz',
+J_q(z) = R_q +\tfrac{1}2\int_0^Z \left( E_{q+1}(\kappa_\nu|z-z'|)S_0(z')+ E_{q+3}(\kappa_\nu|z-z'|)S_2(z')\right) dz',
 $$
 
 $$
@@ -93,7 +91,7 @@ $$
   
 ## List of files
 
-In this repository all files beginning with IQ solve the above problem. Some are in C++ , one is in Matlab another in Fortran and others are in Python (trying to improve the speed).
+In this repository all files  with IQ in their names solve the above problem. Some are in C++ , one is in Matlab another in Fortran and others are in Python (trying to improve the speed).  Finally one is by the Monte Carlo method for comparison (written by Anthropic/claude.AI).
 
 The file "twoRTlacJK.edp" is a combination of VRTE with the Navier-Stokes equations to simulate the heating of water of a pool by the sun. It is FreeFem++ file.
  

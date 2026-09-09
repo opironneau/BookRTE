@@ -307,9 +307,9 @@
                                 sigs = kappazj * asz
                                 siga = kappazj * (1.0_wp - asz)
                                 
-                                S_arr(i) = sigs * J0old(jnu, i) + siga * BB(nuj, T(i))
                                 H_arr(i) = 9.0_wp * beta_val * sigs / 8.0_wp * &
                                                    (J2old(jnu, i) - J0old(jnu, i)/3.0_wp - K0old(jnu, i) + K2old(jnu, i))
+                                S_arr(i) = sigs * J0old(jnu, i) + siga * BB(nuj, T(i)) - H_arr(i) /3.
                                 c0 = c0 - q0 * expint_E2(kappasum(jnu, i) * kappanuj) * S_arr(i) * dz
                         end do
                         
@@ -328,7 +328,7 @@
                                 
                                 do j_idx = 2, Nz
                                         Hj = (H_arr(j_idx) + H_arr(j_idx - 1)) / 2.0_wp
-                                        Sj = (S_arr(j_idx) + S_arr(j_idx - 1)) / 2.0_wp - Hj / 3.0_wp
+                                        Sj = (S_arr(j_idx) + S_arr(j_idx - 1)) / 2.0_wp
                                         aux = kappanuj * (kappasum(jnu, i) - (kappasum(jnu, j_idx) + kappasum(jnu, j_idx - 1)) / 2.0_wp)
                                         
                                         expE1ij = expint_E1(aux)

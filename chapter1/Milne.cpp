@@ -1,4 +1,6 @@
 // Solves Milne's Problem
+// compile with g++ -O3 -std=c++17  -o Milne MilneProblem.cpp
+
 #include <iostream>
 #include <fstream>
 #include <cmath>
@@ -9,11 +11,11 @@ using namespace std;
 
 const int Nz=60, Nmu=100; // nb points in z and tau in (0,1)
 const int kmax=15;  // nb fixed point iterations
-const double tau1=1;
+const double tau1=2;
 const double dtau=tau1/(Nz-1);
 const double mus=1./sqrt(3.); // an inclination is 60°
 const double Is= 1; // Sunlight intensity
-double J00[Nz], J0[Nz], S[Nz];
+double J0[Nz], S[Nz];
 
 double expint_E1(const double t=1){
      double t1=fabs(t); // allow calls with negative argument
@@ -51,8 +53,8 @@ int getI(){
 }
 
 double schwarzschild(const double tau){
-    const double J00=Is/2, B=J00/tau1/2, A = J00-B, exp2tau=exp(-2*tau);
-    return 2*(J00*exp2tau+ A*(1-exp2tau)-B*(2*tau-1+exp2tau));
+    const double J00=Is/2;
+    return J00*(1-(1+tau)/(1+tau1)) +J00*(1-tau/(1+tau1));
 }
 int main(int argc, const char * argv[]) {
     
@@ -70,7 +72,7 @@ int main(int argc, const char * argv[]) {
         }
         cout<<k<<" "<<J0[1]<<endl;
     }
-    cout<<endl<<"tau      J0[tau]"<<endl;
+    cout<<endl<<"tau      J0[tau]   Schwarzschild[tau]"<<endl;
     for(int i=0;i<Nz;i++) cout<< i*dtau<<" "<< J0[i]<<" "<< schwarzschild(i*dtau) << endl;
  //   getI(); //uncomment to display I(tau,mu)
     return 0;

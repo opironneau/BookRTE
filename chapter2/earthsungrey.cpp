@@ -1,6 +1,8 @@
 //  /BookVRTE/prog/earth/earthNoT/earth1.cpp
 //
 //  Created by Olivier Pironneau on 08/06/2025.
+// compile with g++ earthsungrey.cpp
+// run with ./a.out
 //
 
 #include <iostream>
@@ -9,7 +11,7 @@
 #include <string>
 #include <time.h>
 using namespace std;
-#define sqr(x) (x*x)
+#define sqr(x) ((x)*(x))
 
 const double Ce= 2., Cs=2.0e-6 ;
 const double rho0=1.,drho=-0.7; // density gradient
@@ -27,7 +29,7 @@ const int kmax=14;  // nb fixed point iterations
 const double dz=Z/(Nz-1);
 double  J0[Nz], S[Nz], T[Nz];
 
-string basedir("");//("/Users/pironneau/Dropbox/aranger/TeX2026/BookVRTE/prog2/earthsungrey/");
+string basedir("");
 
 double expint_E1(const double t=1){ // will not work if if t>2.5
     const double tmin=1.e-10; // min t in ExpInt(t)
@@ -35,8 +37,8 @@ double expint_E1(const double t=1){ // will not work if if t>2.5
     const int Kexpint = 9+(t1-1)*4;; // precision in exponential integral function E1
     const double  gaNtaua =0.577215664901533; // special integration for log(t)
     if(t1<tmin) return 0.;// because integral_0^t(logx)dx ~0
-    if(t1>4) {
-        cout << "value of E_1 is incorrect with "<<t<<">4"<<endl; return 0;}
+    if(t1>14) {
+        cout << "value of E_1 is incorrect with "<<t<<">14"<<endl; return 0;}
     double ak=t1, soNtaue=-gaNtaua - log(t1)+ak;
     for(int k=2;k<Kexpint;k++){
         ak *= -t1*(k-1)/sqr(k);

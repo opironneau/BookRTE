@@ -20,11 +20,15 @@ Vh J0=0;                // Declares J0  in the FEM space
 real cs=1, mus=1/sqrt(3.);
 func real E1B(real xx){ return int1d(Th)(gslsfexpintE1(abs(x-xx))*J0(x));}
                         // computes int_0^1 E1(|x-xx|) S(x) dx. at xx
+cout << "Convergence of J0(0)" <<endl;
 for(int i=0; i<15;i++){ // ISIF
     J0= E1B(x)/2 + cs/2 * exp(-x/mus); // computes expression at all x
     cout<<J0(0)<<endl;  // to check convergence
 }
-cout<<J0[]<<endl;
+cout<<" tau  J0(tau)"<<endl;
+for(real tau=0;tau<1; tau+=0.03)
+	cout<<tau<<" "<<J0(tau) <<endl;
+
 ~~~~
 
 To compute $I(x,\mu)$ at some given $x,\mu$ one must approximate the Dirac mass at $\mu_s$ by an exponential and use the following when $\mu>0$
@@ -39,6 +43,7 @@ $$
 real mu;
 
 func real convolp(real xx){ return  int1d(Th)((x<xx)*exp((x-xx)/mu)*J0(x)/mu);}
+
 Vh I ;
 cout<<endl;
 real C=0, dmu=0.01, lambda=500;
@@ -54,14 +59,20 @@ $$
 
 ~~~freefem
 // compute I from J0 when mu<0
-func real convoln(real xx){ return - int1d(Th)((x>xx)*exp((x-xx)/mu)*J0(x)/mu);}for(mu=0.03; mu<1;mu+=0.03){
-	for(real xx=0.;xx<1;xx+=0.03)
-		cout<<mu<<" "<<xx<<" "<<convolp(xx) + C*exp(-lambda*(mu-mus)^2)*exp(-xx/mus)<<endl;
-	cout<<endl;
-}for(mu=-1; mu<-0.03;mu+=0.03){
+func real convoln(real xx){ return - int1d(Th)((x>xx)*exp((x-xx)/mu)*J0(x)/mu);}
+
+bool withSurfaceI = false;
+if(withSurfaceI){
+	for(mu=0.03; mu<1;mu+=0.03){
+	 	for(real xx=0.;xx<1;xx+=0.03)
+		  	cout<<mu<<" "<<xx<<" "<<convolp(xx) + C*exp(-lambda*(mu-mus)^2)*exp(-xx/mus)<<endl;
+		cout<<endl;
+	}
+  for(mu=-1; mu<-0.03;mu+=0.03){
 	for(real xx=0.;xx<1;xx+=0.03)
 		cout<<mu<<" "<<xx<<" "<<convoln(xx)<<endl;
 	cout<<endl;
+  }
 }
 ~~~
 The last chunk of printed data can be displayed as a surface $x,\mu \to I(x,\mu)$ by gnuplot. Copy paste the data into a text file called "surfdata.txt"; launch gnuplot from the terminal window and type

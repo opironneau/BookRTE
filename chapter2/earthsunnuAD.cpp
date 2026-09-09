@@ -1,9 +1,14 @@
 
 //  Solve RTE with scattering and z-dependent kappa
+//
 //  Created by Olivier Pironneau on 10/05/2025.
+//
 // kappa is fixed. For variable add "readkappa" function
 //  and put kappa file  next to basedir
 // file names for results: K=0, no CO2,  K=1 with CO2
+
+// compile with g++ -O3 -std=c++17  -o earthsunnuAD earthsunnuAD.cpp
+// run by ./earthsunnuAD
 
 #include <iostream>
 #include <fstream>
@@ -43,7 +48,7 @@ double  nu[jmaxmax];
 ddouble kappanu[jmaxmax];      // uneven discretization of [numin,numax]
 ddouble  J0[jmaxmax][Nz], J0old[jmaxmax][Nz],T[Nz];// mean radiation and temperature
 
-string basedir("/Users/pironneau/Dropbox/aranger/TeX2026/BookVRTE/prog2/greenhouse4/");
+string basedir("");
 string mykappafile(basedir+"_kappa.txt"); // 1 - kappa
 string myresulttemperature(basedir+"temperature2xxx");
 string myresultmeanintensity(basedir+"imean0");
@@ -58,12 +63,12 @@ const double as(double z, double nu){ return 0.3*(1+0.5*(z2-z)*(z-z1)*(z>z1)*(z<
                            + 0.5*(nu<nu2)*(nu>nu1)*sqr(sqr(nu/nu2))*(z>z3));} // scattering coefficient
 
 
-ddouble expint_E1(const ddouble t=1){ // will not work if if t>2.5
+ddouble expint_E1(const ddouble t=1){ // will not work if if t>14
      ddouble abst=abs(t);
     const int Kexpint = 9+abst.val[0]*4;; // precision in exponential integral function E1
     const ddouble  gaNtaua =0.577215664901533; // special integration for log(t)
     if(abst<1e-5) return 0;
-    if(abst>2.5) {
+    if(abst>14) {
         cout << "value of E_1 is incorrect with "<<t<<">2.5"<<endl; return 0;}
     ddouble ak=abst, soNtaue=-gaNtaua - log(abst)+ak;
     for(int k=2;k<Kexpint;k++){

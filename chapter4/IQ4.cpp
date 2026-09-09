@@ -54,7 +54,7 @@ double  J0[jmaxmax][Nz], J0old[jmaxmax][Nz],// mu integral of I_nu and
         K2[jmaxmax][Nz], K2old[jmaxmax][Nz], // mu integral of mu^2 I_nu
         T[Nz], kappaz[jmaxmax][Nz], kappasum[jmaxmax][Nz];// Temperature, kappa(z) and int_0^z(kappa(z))
 
-string basedir("/Users/pironneau/Dropbox/aranger/TeX2026/BookVRTE/prog4/IQ4chap4/IQ4chap4/");
+string basedir("");
 string mykappafile(basedir+"_kappa.txt"); // 1 - kappa
 string myresulttemperature(basedir+"temperatureyyx");
 string myresultmeanintensity(basedir+"imean0");
@@ -68,10 +68,10 @@ const double as(double z, double nu){// scattering
 }
 const double expint_E1(const double t=1){
      double t1=fabs(t);
-    const int Kexpint = 9+(t1-1)*4;; // precision in exponential integral function E1
+    const int Kexpint = 12+(t1-1)*4;; // precision in exponential integral function E1
     const double  gaNtaua =0.577215664901533; // special integration for log(t)
     if(t1<1e-5) return 0;
-    if(t1>4) {
+    if(t1>12) {
         if(verbose) cout << "argument of E_1>2.5"<<endl;
         double tx=1./t1;
         return exp(-t1)*tx * (1 +(-1+(2+(-6+(24+(-120+720*tx)*tx)*tx)*tx)*tx)*tx );
@@ -93,11 +93,11 @@ const double expint_E3(const double t=1){
 }
 const double expint_E4(const double t=1){
     double t1=fabs(t);
-    return (exp(-t1) - t*expint_E3(t1))/3;
+    return (exp(-t1) - t1*expint_E3(t1))/3;
 }
 const double expint_E5(const double t=1){
     double t1=fabs(t);
-    return (exp(-t1) - t*expint_E4(t1))/4;
+    return (exp(-t1) - t1*expint_E4(t1))/4;
 }
 
 const double Bsun(const double nu){ return sqr(nu)*nu/(exp(nu/Ts) -1);} // Boltzmann
@@ -146,14 +146,16 @@ int updateJK(){
     for(int jnu=0; jnu<jmax; jnu++){  // frequency loop
         double H[Nz],S[Nz];
         double kappanuj = kappanu[jnu], nuj=nu[jnu];
-        double cc=kappasum[jnu][Nz-1],c0= - q0*mus*Cs*Bsun(nuj)*exp(-kappanuj*kappasum[jnu][Nz-1]/mus);
+        double  cc=kappasum[jnu][Nz-1],
+                c0= - q0*mus*Cs*Bsun(nuj)*exp(-kappanuj*kappasum[jnu][Nz-1]/mus);
         
         for(int i=0;i<Nz;i++){ // initial altitude loop;
             double z=i*dz, kappazj=kappaz[jnu][i]*kappanuj,
                     asz=as(z,nuj), sigs=kappazj*asz, siga=kappazj*(1-asz);
-            S[i] = sigs*J0old[jnu][i]+siga*BB(nuj,T[i]) ;
             H[i] = 9*_beta*sigs/8 * (J2old[jnu][i] -J0old[jnu][i]/3 - K0old[jnu][i]+K2old[jnu][i]);
-            c0 -= q0* expint_E2(kappasum[jnu][i]*kappanuj)*S[i]*dz;
+            S[i] = sigs*J0old[jnu][i]+siga*BB(nuj,T[i]) -H[i]/3 ;
+            c0 -= q0* (expint_E2(kappasum[jnu][i]*kappanuj)*S[i]
+                       + expint_E4(kappasum[jnu][i]*kappanuj)*H[i])*dz;
         }
         
         for(int i=0;i<Nz;i++) { // main altitude loop
@@ -161,13 +163,13 @@ int updateJK(){
             double J0z  = Ce*Bearth(nuj)*expint_E3(ksz)/2;
             double aux = Cs*Bsun(nuj)*exp(-(kappasum[jnu][Nz-1]-kappasum[jnu][i])*kappanuj/mus)/2;
             J0z   += aux;
-                        J0z+= c0*expint_E2(ksz)/2;
+            J0z+= c0*expint_E2(ksz)/2;
             double J2z  = Ce*Bearth(nuj)*expint_E5(ksz)/2 + sqr(mus)*aux + c0*expint_E4(ksz)/2;
             double K0z=0, K2z=0;
  
             for(int j=1;j<Nz;j++){ // convolution loop
                 double Hj=(H[j]+H[j-1])/2;
-                double Sj=(S[j]+S[j-1])/2-Hj/3;
+                double Sj=(S[j]+S[j-1])/2;
                 int ip=i, jp=j;
                 if(i<j){ip=j; jp=i;}
                 double aux = kappanuj*(kappasum[jnu][ip]-kappasum[jnu][jp] -dz/2);

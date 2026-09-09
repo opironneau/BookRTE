@@ -61,6 +61,6 @@ The easiest way to try the program is to use a terminal and type
 g++ earthsungrey.cpp
 ./a.out
 
-and similar for others. But to work on the program we recommand using an IDE as discussed in the helpxxx.md in the main section of this reporitory.
+and similarly for others. But to work on the program we recommand using an IDE as discussed in the helpxxx.md in the main section of this reporitory.
 
 
