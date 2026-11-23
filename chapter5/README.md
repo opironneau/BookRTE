@@ -6,3 +6,7 @@ The VRTE of chapter 4 are valid for a piecewise constant refractive index $n$ if
 ISIF with the Fresnel conditions is implemented in IQn.cpp.  It is possible to simulate system with discontinuous density at $z=Y$.
 
 The programs of Chapter 6 can also apply to the piecewise constant case.
+
+In addition, claude code wrote a Monte Carlo solver with discontinuous index at Y and varying index elsewhere called MCIQn.cpp
+
+Similarly claude code wrote a DISORT-like solver with discontinuous index at Y and varying index elsewhere called SNIQn.cpp

@@ -77,7 +77,7 @@ double backtoz(const double z){ return (drho==0)? z : (sqrt(1+2*drho*z/rho0)-1)/
 
 // ---------------------------------------------------------------- run time parameters
 long   Nphot  = 20000;      // photons per frequency and per iteration
-int    kmax   = 20;         // outer iterations on the temperature
+int    kmax   = 15;         // outer iterations on the temperature
 double nuplot = 0.68;      // frequency at which I(z,mu) and Q(z,mu) are kept
 int    Nmu    = 40;         // angular bins for the plot
 unsigned long seed0 = 20260908UL;
@@ -135,6 +135,7 @@ int readkappa(string mykappafile){
         kappafile >> waveno >> kappaux;
         kappanu[j]=fmax(kappaux,kappamin);
         nu[j]=3/waveno;
+        if((nu[j]>3./18)&&(nu[j]<3./14)) kappanu[j] *=1.2; //CO2
         ks[0]=0;                            // same trapezoidal rule as IQ4.cpp
         for(int i=1;i<Nz;i++)
             ks[i]=ks[i-1]+(kapparhoz(nu[j],i*dz)+kapparhoz(nu[j],(i-1)*dz))*dz/2;

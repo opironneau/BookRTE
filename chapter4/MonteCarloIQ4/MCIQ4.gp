@@ -3,7 +3,7 @@ set terminal pngcairo size 1350,900 enhanced font 'Helvetica,13'
 set output 'MCIQ4.png'
 set palette defined (0 '#2b1b6e', 0.35 '#1f8ac0', 0.6 '#7fd06a', 0.8 '#f6d746', 1 '#b3202a')
 mus=0.5
-set multiplot layout 2,2 title "Monte Carlo for (4.9)-(4.11):  {/Symbol b}=0.5, {/Symbol m}_s=0.5, q_0=-0.3, c'_e=2, c_s=2e-06;   surfaces at {/Symbol n}=0.678537 ({/Symbol l}=4.42128 {/Symbol m}m, {/Symbol k}_{/Symbol n}=0.5) with 4000000 photons"
+set multiplot layout 2,2 title "Monte Carlo for (4.9)-(4.11):  {/Symbol b}=0.5, {/Symbol m}_s=0.5, q_0=-0.3, c'_e=2, c_s=2e-06;   surfaces at {/Symbol n}=0.678537 ({/Symbol l}=4.42128 {/Symbol m}m, {/Symbol k}_{/Symbol n}=1.20898) with 800000 photons"
   set xlabel 'z'; set ylabel '{/Symbol m}'; set xrange [0:0.696]; set yrange [-1:1]
   set pm3d depthorder; set hidden3d; set style fill transparent solid 0.9
   set ticslevel 0.05; set view 55,340,1,1.15; unset key; unset colorbox

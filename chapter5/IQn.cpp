@@ -24,10 +24,10 @@ const double mus=0.5;
 const double _beta=0.5;
 
 const bool verbose=false;
-const int Nmu=251, Nz=80; // nb points in mu and in z
+const int Nmu=251, Nz=120; // nb points in mu and in z
 const double dmu=2./(Nmu-1), dz=Z/(Nz-1);
-const int kmax=10;  // nb fixed point iterations
-const int jmaxmax=600; // max of max nb of lines in file _kappa.txt
+const int kmax=15;  // nb fixed point iterations
+const int jmaxmax=555; // max of max nb of lines in file _kappa.txt
 const int newton = 50; // max iters to solve inte k*Botlzmann=inte k*Imean
 const double epsdycho=1e-4, epsnewton=1.e-10;  // precision for dychotomy & Newton
 
@@ -35,7 +35,7 @@ const bool cloud=false;
 const double z1 = 0.8, z2=0.9, z3=0.8;  // altitudes for cloud and Rayleigh scattering
 const double nu1=0.5,nu2=1; // range of Rayleigh scattering
 
-const double Y=0.5*Z, nm=1, np=0.9; // must match jump of n(). See also kapparho
+const double Y=0.5*Z, nm=1.3, np=1; // must match jump of n(). See also kapparho
 const double n(double z) {  return  nm + (np-nm)*(z>Y);}  // diffraction index
 
 const double kapparhoz(double z){ return (1+drho*z)*(1*(z<Y) + 1*(z>=Y));}// density
@@ -115,7 +115,7 @@ const double xlam=7;
 const double lamsc=sqrt(pi)/2/xlam*(erf((1+mus)*xlam)+erf((1-mus)*xlam));
 double IZ(const double mu, const double nu){ return Cs/lamsc * exp(-sqr((xlam*(mu+mus)))) * Bsun(nu);}
 
-double kappamin=3, kappamax=0;  // updated in readKappa
+double kappamin=0.001, kappamax=0;  // updated in readKappa
 //*******************************
 int readkappa(string mykappafile){
 //------------------------------
@@ -137,7 +137,7 @@ int readkappa(string mykappafile){
     double kappaux, waveno;
     // test the read itself (eof() is only set *after* a failed read) and stay in bounds
     while((j<jmaxmax) && (kappafile >> waveno >> kappaux)){
-        kappanu[j]  = fmin(3.,fmax(kappaux,0.01));
+        kappanu[j]  = fmax(kappaux,kappamin);
         nu[j]=3/waveno;
         // bracket the *clamped* values: kappanu[] is what indexes PHI and DeltaS
         if(kappanu[j]>kappamax) kappamax=kappanu[j];
@@ -211,8 +211,8 @@ int getXY(const int mppm, const double mu){
             double etapm = sqrt(etapm2),
             aux1= sqr((fmu-npm*etapm)/(fmu+npm*etapm))/2,
             aux2= sqr((npm*fmu-etapm)/(npm*fmu+etapm))/2,
-            auy1= sqr(npm)*2*npm*fmu*etapm/sqr(fmu+npm*etapm),
-            auy2= sqr(npm)*2*npm*fmu*etapm/sqr(npm*fmu+etapm);
+            auy1= 2*npm*fmu*etapm/sqr(fmu+npm*etapm),      // = T_p/2, no n^2:
+            auy2= 2*npm*fmu*etapm/sqr(npm*fmu+etapm);      // the unknown is I/n^2
             if(npm>1){
                 Xpm[jmu][0][0] = (mu2>mucn2)* (aux1+aux2) + (mu2<mucn2) ;
                 Xpm[jmu][0][1] = (mu2>mucn2)* (aux1-aux2);
@@ -242,8 +242,8 @@ int getXY(const int mppm, const double mu){
             double etamp=sqrt(etamp2),
             aux1= sqr((fmu-nmp*etamp)/(fmu+nmp*etamp))/2,
             aux2= sqr((nmp*fmu-etamp)/(nmp*fmu+etamp))/2,
-            auy1= sqr(nmp)*2*nmp*fmu*etamp/sqr(fmu+nmp*etamp),
-            auy2= sqr(nmp)*2*nmp*fmu*etamp/sqr(nmp*fmu+etamp);
+            auy1= 2*nmp*fmu*etamp/sqr(fmu+nmp*etamp),      // = T_p/2, no n^2:
+            auy2= 2*nmp*fmu*etamp/sqr(nmp*fmu+etamp);      // the unknown is I/n^2
             if(nmp>1){
                 Xmp[jmu][0][0] = (mu2>mucn2)* (aux1+aux2) + (mu2<mucn2) ;
                 Xmp[jmu][0][1] = (mu2>mucn2)* (aux1-aux2);
@@ -505,7 +505,7 @@ double root(const double rhs, const double T0,int i){
 double rhsTeq(const int i){
     double rhs=0;
     for(int j=1; j<jmax;j++)
-        rhs+=(1-as(i*dz,nu[j]))*kappanu[j]*J0[j][i]*(nu[j]-nu[j-1]);
+        rhs+=(1-as(i*dz,nu[j]))*kappanu[j]*(J0[j][i]+J0[j-1][i])*(nu[j]-nu[j-1])/2;
     return rhs;
 }
 
@@ -590,8 +590,8 @@ int multiBlock(double initT)
             }
         double normG=0, normS=0;
         for(int j=1; j<jmax;j++)   // j=0 read nu[-1]
-            for(int i=0;i<Nz;i++){ normG+=J0[j][i]*(nu[j]-nu[j-1])*dz;
-                normS+=K2[j][i]*(nu[j]-nu[j-1])*dz; }
+            for(int i=0;i<Nz;i++){ normG+=(J0[j][i]+J0[j-1][i])*(nu[j]-nu[j-1])*dz/2;
+                normS+=(K2[j][i]+K2[j-1][i])*(nu[j]-nu[j-1])*dz/2; }
         cout << "k= "<<k <<"\t"<<T[2]*4798-273<<"\t"<<normG<<"\t"<<normS<<endl;
     }
      return 0;
@@ -736,7 +736,7 @@ int tabulate(){
 
 int main(int argc, const char * argv[]) {
     //----------------------------------
-    if(argc>1){ // optional output/input directory, so the code runs out of the box
+    if(argc>1 && string(argv[1]).find('=')==string::npos){ // optional directory
         basedir=string(argv[1]);
         if(basedir.back()!='/') basedir+="/";
         mykappafile=basedir+"_kappa.txt";
@@ -744,8 +744,11 @@ int main(int argc, const char * argv[]) {
     }
     jmax=readkappa(mykappafile);
 
-    { int K=1;
-//    for(int K=0;K<2;K++){
+    int K=0;                  // 0: kappa as read; 1: CO2 band enhanced; 2: kappa=0.5
+    for(int i=1;i<argc;i++){ string s(argv[i]);
+        if(s.rfind("K=",0)==0) K=atoi(s.c_str()+2); }
+    cout<<"K = "<<K<<(K?" (CO2 band enhanced)":" (kappa as read in the file)")<<endl;
+    {
         for(int j=0;j<jmax;j++)
             if (K==1){
                 if((nu[j]>3./18)&&(nu[j]<3./14))

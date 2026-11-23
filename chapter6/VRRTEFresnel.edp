@@ -124,6 +124,10 @@ Xh  etapm = sign(x)*sqrt(max(0.,1-sqr(nnpm)*(1-x*x))),
   	aux1= sqr((abs(x)-nnpm*etapm)/max(0.001,abs(x)+nnpm*etapm)), 
 	aux2= sqr((nnpm*abs(x)-etapm)/max(0.001,nnpm*abs(x)+etapm));
 	
+// The masks (nn<1)+(nn>=1)*(x*x>mucn2) implement the total internal reflection
+// window |mu|<mu_c: there Y=0 and the (I,Q) block of X is the identity (Gamma).
+// Here nnmp=1.4, so mu_c=0.70 on the Th1 side.  max(0.,...) in etapm/etamp keeps
+// the square root real.
 Xpm[0] = ((nnpm<1)+(nnpm>=1)*(x*x>mucn2))*(aux1+aux2)/2 + (nnpm>=1)*(x*x<mucn2) ;
 Xpm[3]=Xpm[0];
 Xpm[1]=((nnpm<1)+(nnpm>=1)*(x*x>mucn2))* (aux1-aux2)/2;
@@ -157,6 +161,12 @@ varf AA1(I1,I1h) = int2d(Th1)(operator(I1,I1h) + 0.1*dy(I1)*dy(I1h))
                + on(1,66, I1=0)+on(12, I1=exp(-lam*sqr(x+ib/real(N))) );
 matrix M1  =  AA1(V1h,V1h) ;
 
+// N1[ib] and N2[ib] are NOT the Gaussian basis functions: they are the solutions
+// of the one-sided transport problems driven by them -- the Itilde_n^- and
+// Itilde_n^+ of section 6.6.2.  On the interface labels 12 / 7 they coincide with
+// the Gaussians (that is the imposed datum); at the reflected angle -mu and the
+// refracted angle eta they are the computed response traces.  This is what carries
+// kappa, sigma_s and the layer thickness into the interface system below.
 V1h[int] N1(N+1);
 for(ib=0;ib<N+1;ib++){
 	real[int] aux = AA1(0,V1h);
@@ -177,24 +187,28 @@ real[int,int] A11(N+1,N+1),B11(N+1,N+1),C11(N+1,N+1),D11(N+1,N+1);
 real[int,int] A12(N+1,N+1),B12(N+1,N+1),C12(N+1,N+1),D12(N+1,N+1);
 real[int,int] A21(N+1,N+1),B21(N+1,N+1),C21(N+1,N+1),D21(N+1,N+1);
 real[int,int] A22(N+1,N+1),B22(N+1,N+1),C22(N+1,N+1),D22(N+1,N+1);
-for(n=0;n<=N;n++)
+// NB: loop on nb, NOT on n -- n is the mesh density set on line 6.
+// The mass terms use N1[nb],N2[nb] restricted to labels 12 / 7, where they equal
+// the Gaussian data; the X,Y terms use them at -x and at etamp/etapm, where they
+// are the computed response traces.
+for(int nb=0;nb<=N;nb++)
     for(int m=0;m<=N;m++){
-        A11(m,n) =  int1d(Th1,12)(N1[n]*N1[m]) - int1d(Th1,12)(Xmp[0](-x,y)*N1[n](-x,y)*N1[m]);
-        A12(m,n) = -int1d(Th1,12)( Xmp[1](-x,y)*N1[n](-x,y)*N1[m]);
-        A21(m,n) = -int1d(Th1,12)( Xmp[2](-x,y)*N1[n](-x,y)*N1[m]);
-        A22(m,n) =  int1d(Th1,12)(N1[n]*N1[m]) - int1d(Th1,12)(Xmp[3](-x,y)*N1[n](-x,y)*N1[m]);
-		B11(m,n) = -int1d(Th1,12)(Ymp[0](-x,y)*N2[n](etamp,y)*N1[m]);
-		B12(m,n) = -int1d(Th1,12)(Ymp[1](-x,y)*N2[n](etamp,y)*N1[m]);
-		B21(m,n) = -int1d(Th1,12)(Ymp[2](-x,y)*N2[n](etamp,y)*N1[m]);
-		B22(m,n) = -int1d(Th1,12)(Ymp[3](-x,y)*N2[n](etamp,y)*N1[m]);
-		C11(m,n) = -int1d(Th2,7)(Ypm[0]*N1[n](etapm,y)*N2[m]);
-		C12(m,n) = -int1d(Th2,7)(Ypm[1]*N1[n](etapm,y)*N2[m]);
-		C21(m,n) = -int1d(Th2,7)(Ypm[2]*N1[n](etapm,y)*N2[m]);
-		C22(m,n) = -int1d(Th2,7)(Ypm[3]*N1[n](etapm,y)*N2[m]);
-		D11(m,n) =  int1d(Th2,7)(N2[m]*N2[n])-int1d(Th2,7)(Xpm[0]*N2[n](-x,y)*N2[m]);
-		D12(m,n) = -int1d(Th2,7)(Xpm[1]*N2[n](-x,y)*N2[m]);
-		D21(m,n) = -int1d(Th2,7)(Xpm[2]*N2[n](-x,y)*N2[m]);
-		D22(m,n) =  int1d(Th2,7)(N2[m]*N2[n])-int1d(Th2,7)(Xpm[3]*N2[n](-x,y)*N2[m]);
+        A11(m,nb) =  int1d(Th1,12)(N1[nb]*N1[m]) - int1d(Th1,12)(Xmp[0](-x,y)*N1[nb](-x,y)*N1[m]);
+        A12(m,nb) = -int1d(Th1,12)( Xmp[1](-x,y)*N1[nb](-x,y)*N1[m]);
+        A21(m,nb) = -int1d(Th1,12)( Xmp[2](-x,y)*N1[nb](-x,y)*N1[m]);
+        A22(m,nb) =  int1d(Th1,12)(N1[nb]*N1[m]) - int1d(Th1,12)(Xmp[3](-x,y)*N1[nb](-x,y)*N1[m]);
+		B11(m,nb) = -int1d(Th1,12)(Ymp[0](-x,y)*N2[nb](etamp,y)*N1[m]);
+		B12(m,nb) = -int1d(Th1,12)(Ymp[1](-x,y)*N2[nb](etamp,y)*N1[m]);
+		B21(m,nb) = -int1d(Th1,12)(Ymp[2](-x,y)*N2[nb](etamp,y)*N1[m]);
+		B22(m,nb) = -int1d(Th1,12)(Ymp[3](-x,y)*N2[nb](etamp,y)*N1[m]);
+		C11(m,nb) = -int1d(Th2,7)(Ypm[0]*N1[nb](etapm,y)*N2[m]);
+		C12(m,nb) = -int1d(Th2,7)(Ypm[1]*N1[nb](etapm,y)*N2[m]);
+		C21(m,nb) = -int1d(Th2,7)(Ypm[2]*N1[nb](etapm,y)*N2[m]);
+		C22(m,nb) = -int1d(Th2,7)(Ypm[3]*N1[nb](etapm,y)*N2[m]);
+		D11(m,nb) =  int1d(Th2,7)(N2[m]*N2[nb])-int1d(Th2,7)(Xpm[0]*N2[nb](-x,y)*N2[m]);
+		D12(m,nb) = -int1d(Th2,7)(Xpm[1]*N2[nb](-x,y)*N2[m]);
+		D21(m,nb) = -int1d(Th2,7)(Xpm[2]*N2[nb](-x,y)*N2[m]);
+		D22(m,nb) =  int1d(Th2,7)(N2[m]*N2[nb])-int1d(Th2,7)(Xpm[3]*N2[nb](-x,y)*N2[m]);
 }
 matrix M=[[A11,A12,B11,B12],[A21,A22,B21,B22],[C11,C12,D11,D12],[C21,C22,D21,D22]];
 set(M, solver=UMFPACK);
@@ -217,14 +231,14 @@ real[int] f1(N+1),g1(N+1),f2(N+1),g2(N+1),rh1(N+1),sh1(N+1),rh2(N+1),sh2(N+1);
 /////////////////////////////////
 for(int i=0; i<6;i++){ // Iterations on the source
 //////////////////// Compute I
-	real[int] aux1 = aa1(0,V1h);
-	I01h[] = M1^-1*aux1;
-	real[int] aux2 = aa2(0,V2h);
-	I02h[] = M2^-1*aux2;
-	real[int] aux3 = bb1(0,V1h);
-	Q01h[] = M1^-1*aux3;
-	real[int] aux4 = bb2(0,V2h);
-	Q02h[] = M2^-1*aux4;
+	real[int] rhsI1 = aa1(0,V1h);   // was aux1: shadowed the Xh aux1 above
+	I01h[] = M1^-1*rhsI1;
+	real[int] rhsI2 = aa2(0,V2h);
+	I02h[] = M2^-1*rhsI2;
+	real[int] rhsQ1 = bb1(0,V1h);
+	Q01h[] = M1^-1*rhsQ1;
+	real[int] rhsQ2 = bb2(0,V2h);
+	Q02h[] = M2^-1*rhsQ2;
 
 	for(int k=0;k<N+1;k++){
 		rh1[k] = -int1d(Th1,12)(I01h*N1[k])+int1d(Th1,12)((Xmp[0](-x,y)*I01h(-x,y)+Xmp[1](-x,y)*Q01h(-x,y)

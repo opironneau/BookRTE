@@ -34,3 +34,5 @@ The general case without discontinuity if  $a_\nu$ and/or $\kappa_\nu$ depend on
 An alternative solution of the PDE programmed by claude AI in python,
 
 - refractive_upwind.py
+
+For comparison with Monte Carlo and Discrete Ordinate Methods see MCIQn.cpp and SNIQn.cpp in folder ``chapter 5''

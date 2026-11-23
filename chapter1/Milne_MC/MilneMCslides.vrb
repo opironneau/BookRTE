@@ -1,0 +1,22 @@
+\frametitle{Using the program}
+\begin{enumerate}
+\item \texttt{cd} to this folder;
+\item check that the data at the top of \MC\ suit you;
+\item compile and run:
+\begin{verbatim}
+g++ -O3 -std=c++17 -o MilneMC MilneMC.cpp
+./MilneMC N=4000000 Nmu=48
+\end{verbatim}
+\item \texttt{gnuplot milneMC\_I.gp}, then look at \texttt{milneMC\_I.png}.
+\end{enumerate}
+\medskip
+
+Parameters as \texttt{key=value} on the command line: \texttt{Z kappa sigmas mus N Nz Nmu
+batches seed plot}. Output: \texttt{milneMC\_J0.txt}, \texttt{milneMC\_I.txt}
+(columns $z$, $\mu$, $I_{\rm diffuse}$, $I_{\rm diffuse}+$beam),
+\texttt{milneMC\_exit.txt}, and the editable script \texttt{milneMC\_I.gp}.
+\medskip
+
+{\footnotesize \texttt{col = 4} instead of \texttt{col = 3} at the top of the script puts
+the beam back inside the surface, spread over the $\mu$ bin containing $\mu_s$ --- what a
+raw track-length tally would have shown.}

@@ -29,9 +29,9 @@ const double mus=0.5; // direction of collimated light
 const double _beta=0.5;  // % of isotropic to Rayleigh scattering
 
 const bool verbose=false; // more output
-const int Nz=50; // nb points in z
+const int Nz=120; // nb points in z
 const double dz=Z/(Nz-1);
-const int kmax=9;  // nb of ISIF iterations
+const int kmax=15;  // nb of ISIF iterations
 const int jmaxmax=600; // max of max nb of points for integration in nu range
 const int newton = 50; // to compute T from the temperature equation
 const double epsdycho=1e-4, epsnewton=1.e-10;  // precision for dychotomy & Newton
@@ -172,11 +172,16 @@ int updateJK(){
                 double Sj=(S[j]+S[j-1])/2;
                 int ip=i, jp=j;
                 if(i<j){ip=j; jp=i;}
-                double aux = kappanuj*(kappasum[jnu][ip]-kappasum[jnu][jp] -dz/2);
-                double expE1ij = expint_E1(aux);
-                double expE3ij = expint_E3(aux);
-                double expE5ij = expint_E5(aux);
-                J0z += (expE1ij*Sj + expE3ij*Hj)*dz/2;
+                // unusual second order quadrature that works
+                double aux = kappanuj*(kappasum[jnu][ip]-kappasum[jnu][jp] - dz/2);
+                double expE1ij = expint_E1(aux)/2;
+                double expE3ij = expint_E3(aux)/2;
+                double expE5ij = expint_E5(aux)/2;
+                aux = kappanuj*(kappasum[jnu][ip-1]-kappasum[jnu][jp-1] +dz/2);
+                expE1ij += expint_E1(aux)/2;
+                expE3ij += expint_E3(aux)/2;
+                expE5ij += expint_E5(aux)/2;
+               J0z += (expE1ij*Sj + expE3ij*Hj)*dz/2;
                 J2z += (expE3ij*Sj + expE5ij*Hj)*dz/2;
                 K0z -= (expE1ij-expE3ij)*Hj*dz/2;
                 K2z -= (expE3ij-expE5ij)*Hj*dz/2;
